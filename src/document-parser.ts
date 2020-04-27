@@ -2,6 +2,7 @@ import {
     IDomStyle, DomType, IDomTable, IDomStyleValues, IDomNumbering, OpenXmlElement, IDomRelationship, IDomSubStyle, NumberingPicBullet, DomRelationshipType
 } from './dom/dom';
 import * as utils from './utils';
+import { PartType } from './document';
 import { DocumentElement } from './dom/document';
 import { ns, CommonProperties } from './dom/common';
 import { lengthAttr, colorAttr, LengthUsage } from './parser/common';
@@ -39,6 +40,20 @@ export class DocumentParser {
     ignoreWidth: boolean = false;
     debug: boolean = false;
 
+    parseContentTypeFile(xmlString: string) {
+        const xoverrides = xml.parse(xmlString, this.skipDeclaration);
+
+        const parts = new Map<PartType, string>();
+        xml.elements(xoverrides).filter(element => element.tagName === 'Override').forEach(overrideElement => {
+            const elementContentType = xml.stringAttr(overrideElement, "ContentType");
+            if (Object.values(PartType).includes(elementContentType as PartType)) {
+                const [part] = Object.entries(PartType).find(([_, contentType]) => contentType === elementContentType);
+                parts.set(PartType[part], xml.stringAttr(overrideElement, "PartName"))
+            }
+        });
+        return parts;
+    }
+    
     parseDocumentRelationsFile(xmlString: string) {
         var xrels = xml.parse(xmlString, this.skipDeclaration);
 
