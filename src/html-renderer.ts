@@ -49,16 +49,11 @@ export class HtmlRenderer {
         if(!options.ignoreFonts)
             this.renderFontTable(document.fontTable, styleContainer);
 
-        var sectionElements = this.renderSections(document.document);
-
-        if (this.inWrapper) {
-            var wrapper = this.renderWrapper();
-            appentElements(wrapper, sectionElements);
-            bodyContainer.appendChild(wrapper);
-        }
-        else {
-            appentElements(bodyContainer, sectionElements);
-        }
+        var wrapper = this.renderWrapper();
+        
+        bodyContainer.appendChild(wrapper);
+        const container = this.inWrapper ? wrapper : bodyContainer
+        this.renderSections(container, document.document);
     }
 
     renderFontTable(fonts: any[], styleContainer: HTMLElement) {
@@ -188,14 +183,26 @@ export class HtmlRenderer {
         return elem;
     }
 
-    renderSections(document: DocumentElement): HTMLElement[] {
+    renderSections(into: HTMLElement, document: DocumentElement): HTMLElement[] {
         var result = [];
 
         this.processElement(document);
 
-        for(let section of this.splitBySection(document.children)) {
-            var sectionElement = this.createSection(this.className, section.sectProps || document.props);
-            this.renderElements(section.elements, sectionElement);
+        const sections = this.splitBySection(document.children);
+
+        while (sections.length > 0) {
+            const section = sections.shift();
+            const sectionElement = this.createSection(this.className, section.sectProps || document.props);
+            into.appendChild(sectionElement);
+            const {remainingElementsAfterConstraintReached} = this.renderElements(section.elements, sectionElement, true);
+            if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
+                if (sections.length > 0) {
+                    sections[0].elements.unshift(...remainingElementsAfterConstraintReached);
+                } else {
+                    const newSection = { sectProps: section.sectProps, elements: remainingElementsAfterConstraintReached }
+                    sections.push(newSection);
+                }
+            }
             result.push(sectionElement);
         }
 
@@ -278,7 +285,8 @@ export class HtmlRenderer {
                 section.${this.className} { box-sizing: border-box; }
                 .${this.className} table { border-collapse: collapse; }
                 .${this.className} table td, .${this.className} table th { vertical-align: top; }
-                .${this.className} p { margin: 0pt; }`;
+                .${this.className} p { margin: 0pt; }
+                .${this.className} p:empty:before { content: ' '; white-space: pre; }`;
 
         return createStyleElement(styleText);
     }
@@ -386,17 +394,30 @@ export class HtmlRenderer {
         return createStyleElement(styleText);
     }
 
-    renderElements(elems: OpenXmlElement[], into?: HTMLElement): Node[] {
+    renderElements(elems: OpenXmlElement[], into?: HTMLElement, heightConstrained?: boolean): {renderedElements: Node[], remainingElementsAfterConstraintReached: OpenXmlElement[]} {
         if(elems == null)
             return null;
 
-        var result = elems.map((e: any) => e.render(this._renderContext)).filter(e => e != null);
+        var result = elems.map((e: any) => ({originalElement: e, renderedElement: e.render(this._renderContext)})).filter(e => e.renderedElement != null);
 
-        if(into)
-            for(let c of result)
-                into.appendChild(c);
+        if(into) {
+            const appendedElements = [];
+            const remainingElements = [...result];
+            for(let c of result) {
+                const containerBeforeHeight = into.getBoundingClientRect().height;
+                into.appendChild(c.renderedElement);
+                const containerAfterHeight = into.getBoundingClientRect().height;
+                if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
+                    into.removeChild(c.renderedElement);
+                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(e => e.originalElement) };
+                } else {
+                    appendedElements.push(c.renderedElement);
+                    remainingElements.shift();
+                }
+            }
+        }
 
-        return result;
+        return {renderedElements: result.map(e => e.renderedElement), remainingElementsAfterConstraintReached: [] };
     }
 
     numberingClass(id: string, lvl: number) {

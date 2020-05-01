@@ -108,6 +108,7 @@ return /******/ (function(modules) { // webpackBootstrap
 Object.defineProperty(exports, "__esModule", { value: true });
 var dom_1 = __webpack_require__(/*! ./dom/dom */ "./src/dom/dom.ts");
 var utils = __webpack_require__(/*! ./utils */ "./src/utils.ts");
+var document_1 = __webpack_require__(/*! ./document */ "./src/document.ts");
 var common_1 = __webpack_require__(/*! ./dom/common */ "./src/dom/common.ts");
 var common_2 = __webpack_require__(/*! ./parser/common */ "./src/parser/common.ts");
 var paragraph_1 = __webpack_require__(/*! ./parser/paragraph */ "./src/parser/paragraph.ts");
@@ -137,6 +138,21 @@ var DocumentParser = (function () {
         this.ignoreWidth = false;
         this.debug = false;
     }
+    DocumentParser.prototype.parseContentTypeFile = function (xmlString) {
+        var xoverrides = xml.parse(xmlString, this.skipDeclaration);
+        var parts = new Map();
+        xml.elements(xoverrides).filter(function (element) { return element.tagName === 'Override'; }).forEach(function (overrideElement) {
+            var elementContentType = xml.stringAttr(overrideElement, "ContentType");
+            if (Object.values(document_1.PartType).includes(elementContentType)) {
+                var part = Object.entries(document_1.PartType).find(function (_a) {
+                    var _ = _a[0], contentType = _a[1];
+                    return contentType === elementContentType;
+                })[0];
+                parts.set(document_1.PartType[part], xml.stringAttr(overrideElement, "PartName"));
+            }
+        });
+        return parts;
+    };
     DocumentParser.prototype.parseDocumentRelationsFile = function (xmlString) {
         var xrels = xml.parse(xmlString, this.skipDeclaration);
         return xml.elements(xrels).map(function (c) { return ({
@@ -1293,14 +1309,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var JSZip = __webpack_require__(/*! jszip */ "jszip");
 var PartType;
 (function (PartType) {
-    PartType["Document"] = "word/document.xml";
-    PartType["Style"] = "word/styles.xml";
-    PartType["Numbering"] = "word/numbering.xml";
-    PartType["FontTable"] = "word/fontTable.xml";
-    PartType["DocumentRelations"] = "word/_rels/document.xml.rels";
-    PartType["NumberingRelations"] = "word/_rels/numbering.xml.rels";
-    PartType["FontRelations"] = "word/_rels/fontTable.xml.rels";
-})(PartType || (PartType = {}));
+    PartType["Document"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
+    PartType["Numbering"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml";
+    PartType["FontTable"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml";
+    PartType["Style"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml";
+    PartType["DocumentRelations"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.relationships+xml";
+    PartType["NumberingRelations"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering.relationships+xml";
+    PartType["FontRelations"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable.relationships+xml";
+})(PartType = exports.PartType || (exports.PartType = {}));
+var normalizePath = function (path) {
+    return path ? path.replace(/^\/+/, '') : path;
+};
 var Document = (function () {
     function Document() {
         this.zip = new JSZip();
@@ -1315,16 +1334,7 @@ var Document = (function () {
     Document.load = function (blob, parser) {
         var d = new Document();
         return d.zip.loadAsync(blob).then(function (z) {
-            var files = [
-                d.loadPart(PartType.DocumentRelations, parser),
-                d.loadPart(PartType.FontRelations, parser),
-                d.loadPart(PartType.NumberingRelations, parser),
-                d.loadPart(PartType.Style, parser),
-                d.loadPart(PartType.FontTable, parser),
-                d.loadPart(PartType.Numbering, parser),
-                d.loadPart(PartType.Document, parser)
-            ];
-            return Promise.all(files.filter(function (x) { return x != null; })).then(function (x) { return d; });
+            return d.loadContentType(parser).then(function () { return d; });
         });
     };
     Document.prototype.loadDocumentImage = function (id) {
@@ -1339,14 +1349,42 @@ var Document = (function () {
         return this.loadResource(this.fontRelations, id, "uint8array")
             .then(function (x) { return x ? URL.createObjectURL(new Blob([deobfuscate(x, key)])) : x; });
     };
+    Document.prototype.loadContentType = function (parser) {
+        var _this = this;
+        var contentTypePart = this.zip.files['[Content_Types].xml'];
+        if (!contentTypePart) {
+            throw new Error("Invalid office open xml document, missing [Content_Types].xml");
+        }
+        return contentTypePart.async("text").then(function (xml) {
+            var parts = parser.parseContentTypeFile(xml);
+            var getRelPath = function (path) {
+                if (!path)
+                    return path;
+                var beginning = path.substr(0, path.lastIndexOf("/") + 1);
+                var remaining = path.replace(beginning, "");
+                return beginning + "_rels/" + remaining + ".rels";
+            };
+            console.log(normalizePath(getRelPath(parts.get(PartType.Document))), contentTypePart, _this.zip.files);
+            var files = [
+                _this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document))), parser),
+                _this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable))), parser),
+                _this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering))), parser),
+                _this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style)), parser),
+                _this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable)), parser),
+                _this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering)), parser),
+                _this.loadPart(PartType.Document, normalizePath(parts.get(PartType.Document)), parser)
+            ];
+            return Promise.all(files.filter(function (x) { return x != null; }));
+        });
+    };
     Document.prototype.loadResource = function (relations, id, outputType) {
         if (outputType === void 0) { outputType = "base64"; }
         var rel = relations.find(function (x) { return x.id == id; });
-        return rel ? this.zip.files["word/" + rel.target].async(outputType) : Promise.resolve(null);
+        return rel ? this.zip.files[rel.target.startsWith("/") ? normalizePath(rel.target) : ("word/" + rel.target)].async(outputType) : Promise.resolve(null);
     };
-    Document.prototype.loadPart = function (part, parser) {
+    Document.prototype.loadPart = function (part, partPath, parser) {
         var _this = this;
-        var f = this.zip.files[part];
+        var f = this.zip.files[partPath];
         return f ? f.async("text").then(function (xml) {
             switch (part) {
                 case PartType.FontRelations:
@@ -2289,6 +2327,13 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
+var __spreadArrays = (this && this.__spreadArrays) || function () {
+    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+    for (var r = Array(s), k = 0, i = 0; i < il; i++)
+        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+            r[k] = a[j];
+    return r;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var break_1 = __webpack_require__(/*! ./elements/break */ "./src/elements/break.ts");
 var paragraph_1 = __webpack_require__(/*! ./elements/paragraph */ "./src/elements/paragraph.ts");
@@ -2322,15 +2367,10 @@ var HtmlRenderer = (function () {
         }
         if (!options.ignoreFonts)
             this.renderFontTable(document.fontTable, styleContainer);
-        var sectionElements = this.renderSections(document.document);
-        if (this.inWrapper) {
-            var wrapper = this.renderWrapper();
-            appentElements(wrapper, sectionElements);
-            bodyContainer.appendChild(wrapper);
-        }
-        else {
-            appentElements(bodyContainer, sectionElements);
-        }
+        var wrapper = this.renderWrapper();
+        bodyContainer.appendChild(wrapper);
+        var container = this.inWrapper ? wrapper : bodyContainer;
+        this.renderSections(container, document.document);
     };
     HtmlRenderer.prototype.renderFontTable = function (fonts, styleContainer) {
         var _loop_1 = function (f) {
@@ -2450,13 +2490,25 @@ var HtmlRenderer = (function () {
         }
         return elem;
     };
-    HtmlRenderer.prototype.renderSections = function (document) {
+    HtmlRenderer.prototype.renderSections = function (into, document) {
+        var _a;
         var result = [];
         this.processElement(document);
-        for (var _i = 0, _a = this.splitBySection(document.children); _i < _a.length; _i++) {
-            var section = _a[_i];
+        var sections = this.splitBySection(document.children);
+        while (sections.length > 0) {
+            var section = sections.shift();
             var sectionElement = this.createSection(this.className, section.sectProps || document.props);
-            this.renderElements(section.elements, sectionElement);
+            into.appendChild(sectionElement);
+            var remainingElementsAfterConstraintReached = this.renderElements(section.elements, sectionElement, true).remainingElementsAfterConstraintReached;
+            if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
+                if (sections.length > 0) {
+                    (_a = sections[0].elements).unshift.apply(_a, remainingElementsAfterConstraintReached);
+                }
+                else {
+                    var newSection = { sectProps: section.sectProps, elements: remainingElementsAfterConstraintReached };
+                    sections.push(newSection);
+                }
+            }
             result.push(sectionElement);
         }
         return result;
@@ -2483,7 +2535,7 @@ var HtmlRenderer = (function () {
                 if (this.options.breakPages && elem.children) {
                     pBreakIndex = elem.children.findIndex(function (r) {
                         var _a, _b;
-                        rBreakIndex = (_b = (_a = r.children) === null || _a === void 0 ? void 0 : _a.findIndex(function (t) { return (t instanceof break_1.Break) && t.break == "page"; }), (_b !== null && _b !== void 0 ? _b : -1));
+                        rBreakIndex = (_b = (_a = r.children) === null || _a === void 0 ? void 0 : _a.findIndex(function (t) { return (t instanceof break_1.Break) && t.break == "page"; })) !== null && _b !== void 0 ? _b : -1;
                         return rBreakIndex != -1;
                     });
                 }
@@ -2515,7 +2567,7 @@ var HtmlRenderer = (function () {
         return wrapper;
     };
     HtmlRenderer.prototype.renderDefaultStyle = function () {
-        var styleText = "." + this.className + "-wrapper { background: gray; padding: 30px; padding-bottom: 0px; display: flex; flex-flow: column; align-items: center; } \n                ." + this.className + "-wrapper section." + this.className + " { background: white; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); margin-bottom: 30px; }\n                ." + this.className + " { color: black; }\n                section." + this.className + " { box-sizing: border-box; }\n                ." + this.className + " table { border-collapse: collapse; }\n                ." + this.className + " table td, ." + this.className + " table th { vertical-align: top; }\n                ." + this.className + " p { margin: 0pt; }";
+        var styleText = "." + this.className + "-wrapper { background: gray; padding: 30px; padding-bottom: 0px; display: flex; flex-flow: column; align-items: center; } \n                ." + this.className + "-wrapper section." + this.className + " { background: white; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); margin-bottom: 30px; }\n                ." + this.className + " { color: black; }\n                section." + this.className + " { box-sizing: border-box; }\n                ." + this.className + " table { border-collapse: collapse; }\n                ." + this.className + " table td, ." + this.className + " table th { vertical-align: top; }\n                ." + this.className + " p { margin: 0pt; }\n                ." + this.className + " p:empty:before { content: ' '; white-space: pre; }";
         return createStyleElement(styleText);
     };
     HtmlRenderer.prototype.renderNumbering = function (styles, styleContainer) {
@@ -2599,17 +2651,30 @@ var HtmlRenderer = (function () {
         }
         return createStyleElement(styleText);
     };
-    HtmlRenderer.prototype.renderElements = function (elems, into) {
+    HtmlRenderer.prototype.renderElements = function (elems, into, heightConstrained) {
         var _this = this;
         if (elems == null)
             return null;
-        var result = elems.map(function (e) { return e.render(_this._renderContext); }).filter(function (e) { return e != null; });
-        if (into)
+        var result = elems.map(function (e) { return ({ originalElement: e, renderedElement: e.render(_this._renderContext) }); }).filter(function (e) { return e.renderedElement != null; });
+        if (into) {
+            var appendedElements = [];
+            var remainingElements = __spreadArrays(result);
             for (var _i = 0, result_1 = result; _i < result_1.length; _i++) {
                 var c = result_1[_i];
-                into.appendChild(c);
+                var containerBeforeHeight = into.getBoundingClientRect().height;
+                into.appendChild(c.renderedElement);
+                var containerAfterHeight = into.getBoundingClientRect().height;
+                if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
+                    into.removeChild(c.renderedElement);
+                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(function (e) { return e.originalElement; }) };
+                }
+                else {
+                    appendedElements.push(c.renderedElement);
+                    remainingElements.shift();
+                }
             }
-        return result;
+        }
+        return { renderedElements: result.map(function (e) { return e.renderedElement; }), remainingElementsAfterConstraintReached: [] };
     };
     HtmlRenderer.prototype.numberingClass = function (id, lvl) {
         return this.className + "-num-" + id + "-" + lvl;
