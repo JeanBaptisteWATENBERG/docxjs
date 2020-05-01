@@ -1564,6 +1564,7 @@ var DomRelationshipType;
 Object.defineProperty(exports, "__esModule", { value: true });
 var RenderContext = (function () {
     function RenderContext() {
+        this.currentPageNumber = 1;
     }
     RenderContext.prototype.numberingClass = function (id, lvl) {
         return this.className + "-num-" + id + "-" + lvl;
@@ -2069,13 +2070,22 @@ var Run = (function (_super) {
         return _this;
     }
     Run.prototype.render = function (ctx) {
-        if (this.fldCharType || this.instrText)
+        if (this.fldCharType)
             return null;
         var elem = this.renderContainer(ctx, "span");
         var wrapper = null;
         if (this.href) {
             wrapper = ctx.html.createElement("a");
             wrapper.href = this.href;
+        }
+        else if (this.instrText) {
+            if (this.instrText.startsWith('PAGE')) {
+                elem.innerText = "" + ctx.currentPageNumber;
+            }
+            if (this.instrText.startsWith('NUMPAGES')) {
+                elem.className = 'total-pages';
+                elem.innerText = "NUMPAGES";
+            }
         }
         else {
             switch (this.props.verticalAlignment) {
@@ -2574,6 +2584,7 @@ var HtmlRenderer = (function () {
                         _b.label = 1;
                     case 1:
                         if (!(sections.length > 0)) return [3, 4];
+                        this._renderContext.currentPageNumber = sectionNumber;
                         section = sections.shift();
                         sectionProps = section.sectProps || document.props;
                         return [4, Promise.all(Object.values(sectionProps.headers).map(function (_a) {
@@ -2622,8 +2633,11 @@ var HtmlRenderer = (function () {
                             }
                         }
                         result.push(sectionElement);
+                        sectionNumber++;
                         return [3, 1];
-                    case 4: return [2, result];
+                    case 4:
+                        this.htmlDocument.querySelectorAll('.total-pages').forEach(function (elem) { return elem.innerText = "" + (sectionNumber - 1); });
+                        return [2, result];
                 }
             });
         });

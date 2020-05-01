@@ -6,13 +6,13 @@ import { element } from "../parser/xml-serialize";
 export class Run extends ContainerBase {
     props: RunProeprties = {} as RunProeprties;
 
+    fldCharType: 'begin' | 'separate' | 'end';
+    instrText: string;
     //TODO
-    fldCharType: any;
-    instrText: any;
     href: any;
 
     render(ctx: RenderContext) : Node {
-        if (this.fldCharType || this.instrText)
+        if (this.fldCharType)
             return null;
 
         var elem = this.renderContainer(ctx, "span");
@@ -22,6 +22,18 @@ export class Run extends ContainerBase {
         {
             wrapper = ctx.html.createElement("a");
             (wrapper as HTMLAnchorElement).href = this.href;
+        }
+        else if (this.instrText)
+        {
+            if (this.instrText.startsWith('PAGE')) {
+                elem.innerText = `${ctx.currentPageNumber}`;
+            }
+
+            if (this.instrText.startsWith('NUMPAGES')) {
+                elem.className = 'total-pages'
+                elem.innerText = `NUMPAGES`;
+            }
+            
         }
         else
         {

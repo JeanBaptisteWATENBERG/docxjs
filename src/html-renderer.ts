@@ -198,6 +198,7 @@ export class HtmlRenderer {
         let sectionNumber = 1;
 
         while (sections.length > 0) {
+            this._renderContext.currentPageNumber = sectionNumber;
             const section = sections.shift();
             const sectionProps = section.sectProps || document.props;
             const resolvedHeaderDefinitions = await Promise.all(Object.values(sectionProps.headers).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
@@ -242,7 +243,10 @@ export class HtmlRenderer {
             }
 
             result.push(sectionElement);
+            sectionNumber++;
         }
+
+        this.htmlDocument.querySelectorAll('.total-pages').forEach((elem: HTMLElement) => elem.innerText = `${sectionNumber - 1}`)
 
         return result;
     }
