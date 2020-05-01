@@ -9,6 +9,11 @@ export class Break extends ElementBase {
     break: BreakType = "textWrapping";
 
     render(ctx: RenderContext) {
+        if (this.break === 'page') {
+            const pageBreak = ctx.html.createElement('span');
+            pageBreak.className = 'page-break';
+            return pageBreak;
+        }
         return this.break == "textWrapping" ? ctx.html.createElement("br") : null;
     }
 }

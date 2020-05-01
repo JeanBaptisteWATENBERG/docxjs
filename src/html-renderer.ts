@@ -3,7 +3,7 @@ import { IDomStyle, IDomTable, IDomStyleValues, IDomNumbering, OpenXmlElement } 
 import { Length } from './dom/common';
 import { Options } from './docx-preview';
 import { DocumentElement, SectionProperties, HeadersOrFooters, HeaderAndFooterType } from './dom/document';
-import { ContainerBase } from './elements/element-base';
+import { ContainerBase, ElementBase } from './elements/element-base';
 import { Break } from './elements/break';
 import { Paragraph } from './elements/paragraph';
 import { Run } from './elements/run';
@@ -473,7 +473,7 @@ export class HtmlRenderer {
         if(elems == null)
             return null;
 
-        var result = elems.map((e: any) => ({originalElement: e, renderedElement: e.render(this._renderContext)})).filter(e => e.renderedElement != null);
+        var result = elems.map((e: ElementBase) => ({originalElement: e, renderedElement: e.render(this._renderContext)})).filter(e => e.renderedElement != null);
 
         if(into) {
             const appendedElements = [];
@@ -482,7 +482,13 @@ export class HtmlRenderer {
                 const containerBeforeHeight = into.getBoundingClientRect().height;
                 into.appendChild(c.renderedElement);
                 const containerAfterHeight = into.getBoundingClientRect().height;
-                if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
+                const containsPageBreak = (c.renderedElement as HTMLElement).querySelector('.page-break');
+                
+                if (containsPageBreak) {
+                    appendedElements.push(c.renderedElement);
+                    remainingElements.shift();
+                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(e => e.originalElement) };
+                } else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
                     into.removeChild(c.renderedElement);
                     return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(e => e.originalElement) };
                 } else {

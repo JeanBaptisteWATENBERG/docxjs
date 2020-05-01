@@ -1666,6 +1666,11 @@ var Break = (function (_super) {
         return _this;
     }
     Break.prototype.render = function (ctx) {
+        if (this.break === 'page') {
+            var pageBreak = ctx.html.createElement('span');
+            pageBreak.className = 'page-break';
+            return pageBreak;
+        }
         return this.break == "textWrapping" ? ctx.html.createElement("br") : null;
     };
     __decorate([
@@ -2805,7 +2810,13 @@ var HtmlRenderer = (function () {
                 var containerBeforeHeight = into.getBoundingClientRect().height;
                 into.appendChild(c.renderedElement);
                 var containerAfterHeight = into.getBoundingClientRect().height;
-                if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
+                var containsPageBreak = c.renderedElement.querySelector('.page-break');
+                if (containsPageBreak) {
+                    appendedElements.push(c.renderedElement);
+                    remainingElements.shift();
+                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(function (e) { return e.originalElement; }) };
+                }
+                else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
                     into.removeChild(c.renderedElement);
                     return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(function (e) { return e.originalElement; }) };
                 }
