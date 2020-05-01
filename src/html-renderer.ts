@@ -74,6 +74,13 @@ export class HtmlRenderer {
                 styleContainer.appendChild(createStyleElement(cssTest));
             });
         }
+
+        const fontFamily = `.${this.className}-wrapper {
+            font-family: ${fonts.map(f => `"${f.name}"`).join(',')};
+        }`;
+
+        appendComment(styleContainer, `Apply fonts`);
+        styleContainer.appendChild(createStyleElement(fontFamily));
     }
 
     processClassName(className: string) {

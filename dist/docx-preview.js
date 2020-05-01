@@ -2469,6 +2469,9 @@ var HtmlRenderer = (function () {
             var f = _c[_b];
             _loop_1(f);
         }
+        var fontFamily = "." + this.className + "-wrapper {\n            font-family: " + fonts.map(function (f) { return "\"" + f.name + "\""; }).join(',') + ";\n        }";
+        appendComment(styleContainer, "Apply fonts");
+        styleContainer.appendChild(createStyleElement(fontFamily));
     };
     HtmlRenderer.prototype.processClassName = function (className) {
         if (!className)
