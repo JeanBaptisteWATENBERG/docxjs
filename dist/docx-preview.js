@@ -1001,6 +1001,7 @@ var DocumentParser = (function () {
         var after = xml.sizeAttr(node, "after");
         var line = xml.intAttr(node, "line", null);
         var lineRule = xml.stringAttr(node, "lineRule");
+        style["margin-top"] = '2pt';
         if (before)
             style["margin-top"] = before;
         if (after)

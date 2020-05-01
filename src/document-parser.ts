@@ -1070,6 +1070,7 @@ export class DocumentParser {
         var line = xml.intAttr(node, "line", null);
         var lineRule = xml.stringAttr(node, "lineRule");
 
+        style["margin-top"] = '2pt';
         if (before) style["margin-top"] = before;
         if (after) style["margin-bottom"] = after;
         
