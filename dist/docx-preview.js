@@ -193,6 +193,27 @@ var DocumentParser = (function () {
         });
         return result;
     };
+    DocumentParser.prototype.parseHeaderOrFooter = function (xmlString) {
+        var _this = this;
+        var result = {
+            type: dom_1.DomType.HeaderOrFooter,
+            children: [],
+            style: {},
+            props: null
+        };
+        var xbody = xml.parse(xmlString, this.skipDeclaration);
+        xml.foreach(xbody, function (elem) {
+            switch (elem.localName) {
+                case "p":
+                    result.children.push(_this.parseParagraph(elem));
+                    break;
+                case "tbl":
+                    result.children.push(_this.parseTable(elem));
+                    break;
+            }
+        });
+        return result;
+    };
     DocumentParser.prototype.parseStylesFile = function (xmlString) {
         var _this = this;
         var result = [];
@@ -1333,8 +1354,9 @@ var Document = (function () {
     }
     Document.load = function (blob, parser) {
         var d = new Document();
+        d.parser = parser;
         return d.zip.loadAsync(blob).then(function (z) {
-            return d.loadContentType(parser).then(function () { return d; });
+            return d.loadContentType().then(function () { return d; });
         });
     };
     Document.prototype.loadDocumentImage = function (id) {
@@ -1349,14 +1371,19 @@ var Document = (function () {
         return this.loadResource(this.fontRelations, id, "uint8array")
             .then(function (x) { return x ? URL.createObjectURL(new Blob([deobfuscate(x, key)])) : x; });
     };
-    Document.prototype.loadContentType = function (parser) {
+    Document.prototype.loadHeaderOrFooter = function (id) {
+        var _this = this;
+        return this.loadResource(this.docRelations, id, "text")
+            .then(function (resource) { return resource ? _this.parser.parseHeaderOrFooter(resource) : null; });
+    };
+    Document.prototype.loadContentType = function () {
         var _this = this;
         var contentTypePart = this.zip.files['[Content_Types].xml'];
         if (!contentTypePart) {
             throw new Error("Invalid office open xml document, missing [Content_Types].xml");
         }
         return contentTypePart.async("text").then(function (xml) {
-            var parts = parser.parseContentTypeFile(xml);
+            var parts = _this.parser.parseContentTypeFile(xml);
             var getRelPath = function (path) {
                 if (!path)
                     return path;
@@ -1364,15 +1391,14 @@ var Document = (function () {
                 var remaining = path.replace(beginning, "");
                 return beginning + "_rels/" + remaining + ".rels";
             };
-            console.log(normalizePath(getRelPath(parts.get(PartType.Document))), contentTypePart, _this.zip.files);
             var files = [
-                _this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document))), parser),
-                _this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable))), parser),
-                _this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering))), parser),
-                _this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style)), parser),
-                _this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable)), parser),
-                _this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering)), parser),
-                _this.loadPart(PartType.Document, normalizePath(parts.get(PartType.Document)), parser)
+                _this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document)))),
+                _this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable)))),
+                _this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering)))),
+                _this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style))),
+                _this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable))),
+                _this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering))),
+                _this.loadPart(PartType.Document, normalizePath(parts.get(PartType.Document)))
             ];
             return Promise.all(files.filter(function (x) { return x != null; }));
         });
@@ -1382,31 +1408,31 @@ var Document = (function () {
         var rel = relations.find(function (x) { return x.id == id; });
         return rel ? this.zip.files[rel.target.startsWith("/") ? normalizePath(rel.target) : ("word/" + rel.target)].async(outputType) : Promise.resolve(null);
     };
-    Document.prototype.loadPart = function (part, partPath, parser) {
+    Document.prototype.loadPart = function (part, partPath) {
         var _this = this;
         var f = this.zip.files[partPath];
         return f ? f.async("text").then(function (xml) {
             switch (part) {
                 case PartType.FontRelations:
-                    _this.fontRelations = parser.parseDocumentRelationsFile(xml);
+                    _this.fontRelations = _this.parser.parseDocumentRelationsFile(xml);
                     break;
                 case PartType.DocumentRelations:
-                    _this.docRelations = parser.parseDocumentRelationsFile(xml);
+                    _this.docRelations = _this.parser.parseDocumentRelationsFile(xml);
                     break;
                 case PartType.NumberingRelations:
-                    _this.numRelations = parser.parseDocumentRelationsFile(xml);
+                    _this.numRelations = _this.parser.parseDocumentRelationsFile(xml);
                     break;
                 case PartType.Style:
-                    _this.styles = parser.parseStylesFile(xml);
+                    _this.styles = _this.parser.parseStylesFile(xml);
                     break;
                 case PartType.Numbering:
-                    _this.numbering = parser.parseNumberingFile(xml);
+                    _this.numbering = _this.parser.parseNumberingFile(xml);
                     break;
                 case PartType.Document:
-                    _this.document = parser.parseDocumentFile(xml);
+                    _this.document = _this.parser.parseDocumentFile(xml);
                     break;
                 case PartType.FontTable:
-                    _this.fontTable = parser.parseFontTable(xml);
+                    _this.fontTable = _this.parser.parseFontTable(xml);
                     break;
             }
             return _this;
@@ -1485,7 +1511,8 @@ exports.renderAsync = renderAsync;
 
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ns = {
-    wordml: "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    wordml: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    relationships: "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 };
 function renderLength(l) {
     return !l ? null : "" + l.value + l.type;
@@ -1508,6 +1535,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var DomType;
 (function (DomType) {
     DomType["Document"] = "document";
+    DomType["HeaderOrFooter"] = "headerOrFooter";
 })(DomType = exports.DomType || (exports.DomType = {}));
 var DomRelationshipType;
 (function (DomRelationshipType) {
@@ -2327,6 +2355,42 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (_) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
 var __spreadArrays = (this && this.__spreadArrays) || function () {
     for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
     for (var r = Array(s), k = 0, i = 0; i < il; i++)
@@ -2379,7 +2443,6 @@ var HtmlRenderer = (function () {
             styleContainer.appendChild(createGoogleFontElement(f.name));
         }
         var _loop_1 = function (f) {
-            console.log(f.refId, f.fontKey);
             this_1.document.loadFont(f.refId, f.fontKey).then(function (fontData) {
                 var cssTest = "@font-face {\n                    font-family: \"" + f.name + "\";\n                    src: url(" + fontData + ");\n                }";
                 appendComment(styleContainer, "Font " + f.name);
@@ -2470,21 +2533,21 @@ var HtmlRenderer = (function () {
         }
         return output;
     };
-    HtmlRenderer.prototype.createSection = function (className, props) {
+    HtmlRenderer.prototype.createSection = function (className, props, header, footer) {
         var elem = this.htmlDocument.createElement("section");
         elem.className = className;
         if (props) {
             if (props.pageMargins) {
                 elem.style.paddingLeft = this.renderLength(props.pageMargins.left);
                 elem.style.paddingRight = this.renderLength(props.pageMargins.right);
-                elem.style.paddingTop = this.renderLength(props.pageMargins.top);
-                elem.style.paddingBottom = this.renderLength(props.pageMargins.bottom);
+                elem.style.paddingTop = header ? this.renderLength(props.pageMargins.header) : this.renderLength(props.pageMargins.top);
+                elem.style.paddingBottom = footer ? this.renderLength(props.pageMargins.footer) : this.renderLength(props.pageMargins.bottom);
             }
             if (props.pageSize) {
                 if (!this.options.ignoreWidth)
                     elem.style.width = this.renderLength(props.pageSize.width);
                 if (!this.options.ignoreHeight)
-                    elem.style.minHeight = this.renderLength(props.pageSize.height);
+                    elem.style.height = this.renderLength(props.pageSize.height);
             }
             if (props.columns && props.columns.numberOfColumns) {
                 elem.style.columnCount = "" + props.columns.numberOfColumns;
@@ -2497,27 +2560,85 @@ var HtmlRenderer = (function () {
         return elem;
     };
     HtmlRenderer.prototype.renderSections = function (into, document) {
-        var _a;
-        var result = [];
-        this.processElement(document);
-        var sections = this.splitBySection(document.children);
-        while (sections.length > 0) {
-            var section = sections.shift();
-            var sectionElement = this.createSection(this.className, section.sectProps || document.props);
-            into.appendChild(sectionElement);
-            var remainingElementsAfterConstraintReached = this.renderElements(section.elements, sectionElement, true).remainingElementsAfterConstraintReached;
-            if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
-                if (sections.length > 0) {
-                    (_a = sections[0].elements).unshift.apply(_a, remainingElementsAfterConstraintReached);
+        return __awaiter(this, void 0, void 0, function () {
+            var result, sections, sectionNumber, section, sectionProps, resolvedHeaderDefinitions, resolvedFooterDefinitions, toTypeIndex, groupByType, headersByType, footersByType, pickedHeader, pickedFooter, sectionElement, header, main, footer, remainingElementsAfterConstraintReached, newSection;
+            var _a;
+            var _this = this;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        result = [];
+                        this.processElement(document);
+                        sections = this.splitBySection(document.children);
+                        sectionNumber = 1;
+                        _b.label = 1;
+                    case 1:
+                        if (!(sections.length > 0)) return [3, 4];
+                        section = sections.shift();
+                        sectionProps = section.sectProps || document.props;
+                        return [4, Promise.all(Object.values(sectionProps.headers).map(function (_a) {
+                                var refId = _a.refId;
+                                return _this.document.loadHeaderOrFooter(refId);
+                            }))];
+                    case 2:
+                        resolvedHeaderDefinitions = _b.sent();
+                        return [4, Promise.all(Object.values(sectionProps.footers).map(function (_a) {
+                                var refId = _a.refId;
+                                return _this.document.loadHeaderOrFooter(refId);
+                            }))];
+                    case 3:
+                        resolvedFooterDefinitions = _b.sent();
+                        toTypeIndex = function (resolvedDefinitions) { return function (type, index) { return ({ type: type, definition: resolvedDefinitions[index] }); }; };
+                        groupByType = function (byType, current) {
+                            var _a;
+                            return (__assign(__assign({}, byType), (_a = {}, _a[current.type] = current.definition, _a)));
+                        };
+                        headersByType = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
+                        footersByType = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
+                        pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
+                        pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
+                        sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);
+                        into.appendChild(sectionElement);
+                        if (pickedHeader) {
+                            header = this.htmlDocument.createElement("header");
+                            this.renderElements(pickedHeader.children, header);
+                            sectionElement.appendChild(header);
+                        }
+                        main = this.htmlDocument.createElement("main");
+                        sectionElement.appendChild(main);
+                        if (pickedFooter) {
+                            footer = this.htmlDocument.createElement("footer");
+                            this.renderElements(pickedFooter.children, footer);
+                            sectionElement.appendChild(footer);
+                        }
+                        remainingElementsAfterConstraintReached = this.renderElements(section.elements, main, true).remainingElementsAfterConstraintReached;
+                        if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
+                            if (sections.length > 0) {
+                                (_a = sections[0].elements).unshift.apply(_a, remainingElementsAfterConstraintReached);
+                            }
+                            else {
+                                newSection = { sectProps: sectionProps, elements: remainingElementsAfterConstraintReached };
+                                sections.push(newSection);
+                            }
+                        }
+                        result.push(sectionElement);
+                        return [3, 1];
+                    case 4: return [2, result];
                 }
-                else {
-                    var newSection = { sectProps: section.sectProps, elements: remainingElementsAfterConstraintReached };
-                    sections.push(newSection);
-                }
-            }
-            result.push(sectionElement);
+            });
+        });
+    };
+    HtmlRenderer.prototype.pickHeaderOrFooter = function (headersOrFootersByType, sectionNumber) {
+        if (headersOrFootersByType['first'] && sectionNumber === 1) {
+            return headersOrFootersByType['first'];
         }
-        return result;
+        else if (headersOrFootersByType['even'] && sectionNumber % 2 === 0) {
+            return headersOrFootersByType['even'];
+        }
+        else if (headersOrFootersByType['default']) {
+            return headersOrFootersByType['default'];
+        }
+        return undefined;
     };
     HtmlRenderer.prototype.splitBySection = function (elements) {
         var current = { sectProps: null, elements: [] };
@@ -2573,7 +2694,7 @@ var HtmlRenderer = (function () {
         return wrapper;
     };
     HtmlRenderer.prototype.renderDefaultStyle = function () {
-        var styleText = "." + this.className + "-wrapper { background: gray; padding: 30px; padding-bottom: 0px; display: flex; flex-flow: column; align-items: center; } \n                ." + this.className + "-wrapper section." + this.className + " { background: white; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); margin-bottom: 30px; }\n                ." + this.className + " { color: black; }\n                section." + this.className + " { box-sizing: border-box; }\n                ." + this.className + " table { border-collapse: collapse; }\n                ." + this.className + " table td, ." + this.className + " table th { vertical-align: top; }\n                ." + this.className + " p { margin: 0pt; }\n                ." + this.className + " p:empty:before { content: ' '; white-space: pre; }";
+        var styleText = "." + this.className + "-wrapper { background: gray; padding: 30px; padding-bottom: 0px; display: flex; flex-flow: column; align-items: center; } \n                ." + this.className + "-wrapper section." + this.className + " { background: white; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); margin-bottom: 30px; }\n                ." + this.className + " { color: black; }\n                section." + this.className + " { box-sizing: border-box; }\n                ." + this.className + " table { border-collapse: collapse; }\n                ." + this.className + " table td, ." + this.className + " table th { vertical-align: top; }\n                ." + this.className + " p { margin: 0pt; }\n                ." + this.className + " p:empty:before { content: ' '; white-space: pre; }\n                \n                section." + this.className + " {\n                    display: flex;\n                    flex-flow: column;\n                    height: 100%;\n                  }\n                  \n                  section." + this.className + " header {\n                    flex: 0 1 auto;\n                  }\n                  \n                  section." + this.className + " main {\n                    flex: 1 1 auto;\n                  }\n                  \n                  section." + this.className + " footer {\n                    flex: 0 1 auto;\n                  }\n                \n                ";
         return createStyleElement(styleText);
     };
     HtmlRenderer.prototype.renderNumbering = function (styles, styleContainer) {
@@ -2964,13 +3085,25 @@ function parseLineSpacing(elem) {
 
 "use strict";
 
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var common_1 = __webpack_require__(/*! ../dom/common */ "./src/dom/common.ts");
 var xml = __webpack_require__(/*! ./common */ "./src/parser/common.ts");
 function parseSectionProperties(elem) {
+    var _a, _b;
     var section = {};
-    for (var _i = 0, _a = xml.elements(elem, common_1.ns.wordml); _i < _a.length; _i++) {
-        var e = _a[_i];
+    for (var _i = 0, _c = xml.elements(elem, common_1.ns.wordml); _i < _c.length; _i++) {
+        var e = _c[_i];
         switch (e.localName) {
             case "pgSz":
                 section.pageSize = {
@@ -2992,6 +3125,12 @@ function parseSectionProperties(elem) {
                 break;
             case "cols":
                 section.columns = parseColumns(e);
+                break;
+            case "footerReference":
+                section.footers = __assign(__assign({}, section.footers), (_a = {}, _a[xml.stringAttr(e, common_1.ns.wordml, "type")] = { refId: xml.stringAttr(e, common_1.ns.relationships, "id") }, _a));
+                break;
+            case "headerReference":
+                section.headers = __assign(__assign({}, section.headers), (_b = {}, _b[xml.stringAttr(e, common_1.ns.wordml, "type")] = { refId: xml.stringAttr(e, common_1.ns.relationships, "id") }, _b));
                 break;
         }
     }

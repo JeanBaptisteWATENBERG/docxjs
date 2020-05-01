@@ -103,6 +103,31 @@ export class DocumentParser {
         return result;
     }
 
+    parseHeaderOrFooter(xmlString: string) {
+        var result: DocumentElement = {
+            type: DomType.HeaderOrFooter,
+            children: [],
+            style: {},
+            props: null
+        };
+
+        var xbody = xml.parse(xmlString, this.skipDeclaration);
+
+        xml.foreach(xbody, elem => {
+            switch (elem.localName) {
+                case "p":
+                    result.children.push(this.parseParagraph(elem));
+                    break;
+
+                case "tbl":
+                    result.children.push(this.parseTable(elem));
+                    break;
+            }
+        });
+
+        return result;
+    }
+
     parseStylesFile(xmlString: string): IDomStyle[] {
         var result = [];
 

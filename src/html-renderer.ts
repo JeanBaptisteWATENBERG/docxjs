@@ -2,7 +2,7 @@ import { Document } from './document';
 import { IDomStyle, IDomTable, IDomStyleValues, IDomNumbering, OpenXmlElement } from './dom/dom';
 import { Length } from './dom/common';
 import { Options } from './docx-preview';
-import { DocumentElement, SectionProperties } from './dom/document';
+import { DocumentElement, SectionProperties, HeadersOrFooters, HeaderAndFooterType } from './dom/document';
 import { ContainerBase } from './elements/element-base';
 import { Break } from './elements/break';
 import { Paragraph } from './elements/paragraph';
@@ -64,7 +64,6 @@ export class HtmlRenderer {
         }
         // load embedded fonts
         for(let f of fonts.filter(x => x.refId)) {
-            console.log(f.refId, f.fontKey)
             this.document.loadFont(f.refId, f.fontKey).then(fontData => {
                 var cssTest = `@font-face {
                     font-family: "${f.name}";
@@ -157,7 +156,7 @@ export class HtmlRenderer {
         return output;
     }
 
-    createSection(className: string, props: SectionProperties) {
+    createSection(className: string, props: SectionProperties, header?: DocumentElement, footer?: DocumentElement) {
         var elem = this.htmlDocument.createElement("section");
         
         elem.className = className;
@@ -166,15 +165,15 @@ export class HtmlRenderer {
             if (props.pageMargins) {
                 elem.style.paddingLeft = this.renderLength(props.pageMargins.left);
                 elem.style.paddingRight = this.renderLength(props.pageMargins.right);
-                elem.style.paddingTop = this.renderLength(props.pageMargins.top);
-                elem.style.paddingBottom = this.renderLength(props.pageMargins.bottom);
+                elem.style.paddingTop = header ? this.renderLength(props.pageMargins.header) : this.renderLength(props.pageMargins.top);
+                elem.style.paddingBottom = footer ? this.renderLength(props.pageMargins.footer) : this.renderLength(props.pageMargins.bottom);
             }
 
             if (props.pageSize) {
                 if (!this.options.ignoreWidth)
                     elem.style.width = this.renderLength(props.pageSize.width);
                 if (!this.options.ignoreHeight)
-                    elem.style.minHeight = this.renderLength(props.pageSize.height);
+                    elem.style.height = this.renderLength(props.pageSize.height);
             }
 
             if (props.columns && props.columns.numberOfColumns) {
@@ -190,30 +189,75 @@ export class HtmlRenderer {
         return elem;
     }
 
-    renderSections(into: HTMLElement, document: DocumentElement): HTMLElement[] {
+    async renderSections(into: HTMLElement, document: DocumentElement): Promise<HTMLElement[]> {
         var result = [];
 
         this.processElement(document);
 
         const sections = this.splitBySection(document.children);
+        let sectionNumber = 1;
 
         while (sections.length > 0) {
             const section = sections.shift();
-            const sectionElement = this.createSection(this.className, section.sectProps || document.props);
+            const sectionProps = section.sectProps || document.props;
+            const resolvedHeaderDefinitions = await Promise.all(Object.values(sectionProps.headers).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
+            const resolvedFooterDefinitions = await Promise.all(Object.values(sectionProps.footers).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
+
+            const toTypeIndex = (resolvedDefinitions: DocumentElement[]) => (type: string, index: number): { type: string; definition: DocumentElement; } => ({ type, definition: resolvedDefinitions[index] });
+            const groupByType = (byType: {}, current: { type: string; definition: DocumentElement; }): {} => ({ ...byType, [current.type]: current.definition });
+        
+            const headersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
+            const footersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
+
+            const pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
+            const pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
+
+            const sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);
+
             into.appendChild(sectionElement);
-            const {remainingElementsAfterConstraintReached} = this.renderElements(section.elements, sectionElement, true);
+
+            if (pickedHeader) {
+                const header = this.htmlDocument.createElement("header");
+                this.renderElements(pickedHeader.children, header);
+                sectionElement.appendChild(header);
+            }
+
+            const main = this.htmlDocument.createElement("main");
+            sectionElement.appendChild(main);
+
+            if (pickedFooter) {
+                const footer = this.htmlDocument.createElement("footer");
+                this.renderElements(pickedFooter.children, footer);
+                sectionElement.appendChild(footer);
+            }
+
+            const {remainingElementsAfterConstraintReached} = this.renderElements(section.elements, main, true);
             if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
                 if (sections.length > 0) {
                     sections[0].elements.unshift(...remainingElementsAfterConstraintReached);
                 } else {
-                    const newSection = { sectProps: section.sectProps, elements: remainingElementsAfterConstraintReached }
+                    const newSection = { sectProps: sectionProps, elements: remainingElementsAfterConstraintReached };
                     sections.push(newSection);
                 }
             }
+
             result.push(sectionElement);
         }
 
         return result;
+    }
+
+    private pickHeaderOrFooter(headersOrFootersByType: {[type in HeaderAndFooterType]: DocumentElement} | {}, sectionNumber: number): DocumentElement | undefined {
+        if (headersOrFootersByType['first'] && sectionNumber === 1) {
+            return headersOrFootersByType['first'];
+        }
+        else if (headersOrFootersByType['even'] && sectionNumber % 2 === 0) {
+            return headersOrFootersByType['even'];
+        }
+        else if (headersOrFootersByType['default']) {
+            return headersOrFootersByType['default'];
+        }
+        return undefined;
     }
 
     splitBySection(elements: OpenXmlElement[]): { sectProps: SectionProperties, elements: OpenXmlElement[] }[] {
@@ -293,7 +337,27 @@ export class HtmlRenderer {
                 .${this.className} table { border-collapse: collapse; }
                 .${this.className} table td, .${this.className} table th { vertical-align: top; }
                 .${this.className} p { margin: 0pt; }
-                .${this.className} p:empty:before { content: ' '; white-space: pre; }`;
+                .${this.className} p:empty:before { content: ' '; white-space: pre; }
+                
+                section.${this.className} {
+                    display: flex;
+                    flex-flow: column;
+                    height: 100%;
+                  }
+                  
+                  section.${this.className} header {
+                    flex: 0 1 auto;
+                  }
+                  
+                  section.${this.className} main {
+                    flex: 1 1 auto;
+                  }
+                  
+                  section.${this.className} footer {
+                    flex: 0 1 auto;
+                  }
+                
+                `;
 
         return createStyleElement(styleText);
     }

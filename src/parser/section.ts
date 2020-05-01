@@ -1,4 +1,4 @@
-import { SectionProperties } from "../dom/document";
+import { SectionProperties, HeaderAndFooterType } from "../dom/document";
 import { ns, Columns, Column } from "../dom/common";
 import * as xml from './common';
 
@@ -29,6 +29,20 @@ export function parseSectionProperties(elem: Element): SectionProperties {
 
             case "cols":
                 section.columns = parseColumns(e);
+                break;
+
+            case "footerReference":
+                section.footers = {
+                    ...section.footers,
+                    [xml.stringAttr(e, ns.wordml, "type")]: {refId: xml.stringAttr(e, ns.relationships, "id")}
+                }
+                break;
+
+            case "headerReference":
+                section.headers = {
+                    ...section.headers,
+                    [xml.stringAttr(e, ns.wordml, "type")]: {refId: xml.stringAttr(e, ns.relationships, "id")}
+                }
                 break;
         }
     }

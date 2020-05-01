@@ -1,5 +1,6 @@
 export enum DomType {
     Document = "document",
+    HeaderOrFooter = "headerOrFooter"
 }
 
 export enum DomRelationshipType {

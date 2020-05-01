@@ -1,5 +1,6 @@
 export const ns = {
-    wordml: "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    wordml: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    relationships: "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 }
 
 export type LengthType = "px" | "pt" | "%";

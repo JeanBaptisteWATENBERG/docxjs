@@ -22,6 +22,7 @@ const normalizePath = (path: string) => {
 
 export class Document {
     private zip: JSZip = new JSZip();
+    private parser: DocumentParser;
 
     docRelations: IDomRelationship[] = null;
     fontRelations: IDomRelationship[] = null;
@@ -35,9 +36,10 @@ export class Document {
 
     static load(blob, parser: DocumentParser): PromiseLike<Document> {
         var d = new Document();
+        d.parser = parser;
 
         return d.zip.loadAsync(blob).then(z => {
-            return d.loadContentType(parser).then(() => d);
+            return d.loadContentType().then(() => d);
         });
     }
 
@@ -56,14 +58,19 @@ export class Document {
             .then(x => x ? URL.createObjectURL(new Blob([deobfuscate(x, key)])) : x);
     }
 
-    private loadContentType(parser: DocumentParser) {
+    loadHeaderOrFooter(id: string): PromiseLike<DocumentElement> {
+        return this.loadResource(this.docRelations, id, "text")
+            .then(resource => resource ? this.parser.parseHeaderOrFooter(resource) : null);
+    }
+
+    private loadContentType() {
         const contentTypePart = this.zip.files['[Content_Types].xml'];
         if (!contentTypePart) {
             throw new Error("Invalid office open xml document, missing [Content_Types].xml");
         }
         
         return contentTypePart.async("text").then(xml => {
-            const parts = parser.parseContentTypeFile(xml);
+            const parts = this.parser.parseContentTypeFile(xml);
 
             const getRelPath = (path: string) => {
                 if (!path) return path;
@@ -72,15 +79,14 @@ export class Document {
                 return beginning + "_rels/" + remaining + ".rels";
             }
 
-            console.log(normalizePath(getRelPath(parts.get(PartType.Document))), contentTypePart, this.zip.files)
             const files = [
-                this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document))), parser),
-                this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable))), parser),
-                this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering))), parser),
-                this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style)), parser),
-                this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable)), parser),
-                this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering)), parser),
-                this.loadPart(PartType.Document, normalizePath(parts.get(PartType.Document)), parser)
+                this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document)))),
+                this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable)))),
+                this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering)))),
+                this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style))),
+                this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable))),
+                this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering))),
+                this.loadPart(PartType.Document, normalizePath(parts.get(PartType.Document)))
             ];
 
             return Promise.all(files.filter(x => x != null));
@@ -92,37 +98,37 @@ export class Document {
         return rel ? this.zip.files[rel.target.startsWith("/") ? normalizePath(rel.target) : ("word/" + rel.target)].async(outputType) : Promise.resolve(null);
     }
 
-    private loadPart(part: PartType, partPath: string, parser: DocumentParser) {
+    private loadPart(part: PartType, partPath: string) {
         var f = this.zip.files[partPath];
 
         return f ? f.async("text").then(xml => {
             switch (part) {
                 case PartType.FontRelations:
-                    this.fontRelations = parser.parseDocumentRelationsFile(xml);
+                    this.fontRelations = this.parser.parseDocumentRelationsFile(xml);
                     break;
 
                 case PartType.DocumentRelations:
-                    this.docRelations = parser.parseDocumentRelationsFile(xml);
+                    this.docRelations = this.parser.parseDocumentRelationsFile(xml);
                     break;
 
                 case PartType.NumberingRelations:
-                    this.numRelations = parser.parseDocumentRelationsFile(xml);
+                    this.numRelations = this.parser.parseDocumentRelationsFile(xml);
                     break;
 
                 case PartType.Style:
-                    this.styles = parser.parseStylesFile(xml);
+                    this.styles = this.parser.parseStylesFile(xml);
                     break;
 
                 case PartType.Numbering:
-                    this.numbering = parser.parseNumberingFile(xml);
+                    this.numbering = this.parser.parseNumberingFile(xml);
                     break;
 
                 case PartType.Document:
-                    this.document = parser.parseDocumentFile(xml);
+                    this.document = this.parser.parseDocumentFile(xml);
                     break;
 
                 case PartType.FontTable:
-                    this.fontTable = parser.parseFontTable(xml);
+                    this.fontTable = this.parser.parseFontTable(xml);
                     break;
             }
 

@@ -17,10 +17,18 @@ export interface PageMargins {
     gutter: Length;
 }
 
+export type HeaderAndFooterType = 'default' | 'even' | 'first';
+
+export type HeadersOrFooters = {
+    [type in HeaderAndFooterType]?: {refId: string};
+};
+
 export interface SectionProperties {
     pageSize: PageSize,
     pageMargins: PageMargins,
     columns: Columns;
+    headers: HeadersOrFooters;
+    footers: HeadersOrFooters;
 }
 
 export interface DocumentElement extends OpenXmlElement {
