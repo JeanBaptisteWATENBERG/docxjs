@@ -2373,7 +2373,13 @@ var HtmlRenderer = (function () {
         this.renderSections(container, document.document);
     };
     HtmlRenderer.prototype.renderFontTable = function (fonts, styleContainer) {
+        for (var _i = 0, _a = fonts.filter(function (x) { return !x.refId; }); _i < _a.length; _i++) {
+            var f = _a[_i];
+            appendComment(styleContainer, "Importing Google Font " + f.name);
+            styleContainer.appendChild(createGoogleFontElement(f.name));
+        }
         var _loop_1 = function (f) {
+            console.log(f.refId, f.fontKey);
             this_1.document.loadFont(f.refId, f.fontKey).then(function (fontData) {
                 var cssTest = "@font-face {\n                    font-family: \"" + f.name + "\";\n                    src: url(" + fontData + ");\n                }";
                 appendComment(styleContainer, "Font " + f.name);
@@ -2381,8 +2387,8 @@ var HtmlRenderer = (function () {
             });
         };
         var this_1 = this;
-        for (var _i = 0, _a = fonts.filter(function (x) { return x.refId; }); _i < _a.length; _i++) {
-            var f = _a[_i];
+        for (var _b = 0, _c = fonts.filter(function (x) { return x.refId; }); _b < _c.length; _b++) {
+            var f = _c[_b];
             _loop_1(f);
         }
     };
@@ -2731,6 +2737,12 @@ function createStyleElement(cssText) {
     styleElement.type = "text/css";
     styleElement.innerHTML = cssText;
     return styleElement;
+}
+function createGoogleFontElement(fontName) {
+    var fontLinkElement = document.createElement("link");
+    fontLinkElement.rel = "stylesheet";
+    fontLinkElement.href = "https://fonts.googleapis.com/css?family=" + fontName;
+    return fontLinkElement;
 }
 function appendComment(elem, comment) {
     elem.appendChild(document.createComment(comment));

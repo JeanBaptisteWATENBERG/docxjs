@@ -57,7 +57,14 @@ export class HtmlRenderer {
     }
 
     renderFontTable(fonts: any[], styleContainer: HTMLElement) {
+        // try to resolve external fonts
+        for(let f of fonts.filter(x => !x.refId)) {
+            appendComment(styleContainer, `Importing Google Font ${f.name}`);
+            styleContainer.appendChild(createGoogleFontElement(f.name))
+        }
+        // load embedded fonts
         for(let f of fonts.filter(x => x.refId)) {
+            console.log(f.refId, f.fontKey)
             this.document.loadFont(f.refId, f.fontKey).then(fontData => {
                 var cssTest = `@font-face {
                     font-family: "${f.name}";
@@ -481,6 +488,14 @@ function createStyleElement(cssText: string) {
     styleElement.type = "text/css";
     styleElement.innerHTML = cssText;
     return styleElement;
+}
+
+function createGoogleFontElement(fontName: string) {
+    /// Import font from google font using <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Tangerine">
+    const fontLinkElement = document.createElement("link");
+    fontLinkElement.rel = "stylesheet";
+    fontLinkElement.href = `https://fonts.googleapis.com/css?family=${fontName}`
+    return fontLinkElement;
 }
 
 function appendComment(elem: HTMLElement, comment: string) {
