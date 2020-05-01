@@ -63,6 +63,11 @@ export class Document {
             .then(resource => resource ? this.parser.parseHeaderOrFooter(resource) : null);
     }
 
+    getHyperlinkTarget(id: string): string  {
+        const rel = this.docRelations.find(x => x.id == id);
+        return rel.target;
+    }
+
     private loadContentType() {
         const contentTypePart = this.zip.files['[Content_Types].xml'];
         if (!contentTypePart) {

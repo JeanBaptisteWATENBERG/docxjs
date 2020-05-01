@@ -504,7 +504,7 @@ export class DocumentParser {
                     break;
                 
                 case "fldChar":
-                    result.fldCharType = xml.stringAttr(c, "fldCharType");
+                    result.fldCharType = xml.stringAttr(c, "fldCharType") as 'end' | 'begin' | 'separate';
                     break;
 
                 case "br":

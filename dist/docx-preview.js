@@ -1376,6 +1376,10 @@ var Document = (function () {
         return this.loadResource(this.docRelations, id, "text")
             .then(function (resource) { return resource ? _this.parser.parseHeaderOrFooter(resource) : null; });
     };
+    Document.prototype.getHyperlinkTarget = function (id) {
+        var rel = this.docRelations.find(function (x) { return x.id == id; });
+        return rel.target;
+    };
     Document.prototype.loadContentType = function () {
         var _this = this;
         var contentTypePart = this.zip.files['[Content_Types].xml'];
@@ -1880,11 +1884,19 @@ var Hyperlink = (function (_super) {
         var a = this.renderContainer(ctx, "a");
         if (this.anchor)
             a.href = "#" + this.anchor;
+        if (this.refId) {
+            a.href = ctx.document.getHyperlinkTarget(this.refId);
+            a.target = '_blank';
+            a.rel = "noopener noreferrer";
+        }
         return a;
     };
     __decorate([
         xml_serialize_1.fromAttribute("anchor")
     ], Hyperlink.prototype, "anchor", void 0);
+    __decorate([
+        xml_serialize_1.fromAttribute("id")
+    ], Hyperlink.prototype, "refId", void 0);
     return Hyperlink;
 }(element_base_1.ContainerBase));
 exports.Hyperlink = Hyperlink;
