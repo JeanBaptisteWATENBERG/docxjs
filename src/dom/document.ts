@@ -27,8 +27,8 @@ export interface SectionProperties {
     pageSize: PageSize,
     pageMargins: PageMargins,
     columns: Columns;
-    headers: HeadersOrFooters;
-    footers: HeadersOrFooters;
+    headers?: HeadersOrFooters;
+    footers?: HeadersOrFooters;
 }
 
 export interface DocumentElement extends OpenXmlElement {

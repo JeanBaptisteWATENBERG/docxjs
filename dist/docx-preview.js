@@ -2680,13 +2680,13 @@ var HtmlRenderer = (function () {
                         this._renderContext.currentPageNumber = sectionNumber;
                         section = sections.shift();
                         sectionProps = section.sectProps || document.props;
-                        return [4, Promise.all(Object.values(sectionProps.headers).map(function (_a) {
+                        return [4, Promise.all(Object.values(sectionProps.headers || {}).map(function (_a) {
                                 var refId = _a.refId;
                                 return _this.document.loadHeaderOrFooter(refId);
                             }))];
                     case 2:
                         resolvedHeaderDefinitions = _b.sent();
-                        return [4, Promise.all(Object.values(sectionProps.footers).map(function (_a) {
+                        return [4, Promise.all(Object.values(sectionProps.footers || {}).map(function (_a) {
                                 var refId = _a.refId;
                                 return _this.document.loadHeaderOrFooter(refId);
                             }))];
@@ -2697,8 +2697,8 @@ var HtmlRenderer = (function () {
                             var _a;
                             return (__assign(__assign({}, byType), (_a = {}, _a[current.type] = current.definition, _a)));
                         };
-                        headersByType = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
-                        footersByType = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
+                        headersByType = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
+                        footersByType = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
                         pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
                         pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
                         sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);

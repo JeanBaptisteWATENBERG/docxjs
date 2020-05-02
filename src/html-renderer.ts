@@ -208,14 +208,14 @@ export class HtmlRenderer {
             this._renderContext.currentPageNumber = sectionNumber;
             const section = sections.shift();
             const sectionProps = section.sectProps || document.props;
-            const resolvedHeaderDefinitions = await Promise.all(Object.values(sectionProps.headers).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
-            const resolvedFooterDefinitions = await Promise.all(Object.values(sectionProps.footers).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
+            const resolvedHeaderDefinitions = await Promise.all(Object.values(sectionProps.headers || {}).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
+            const resolvedFooterDefinitions = await Promise.all(Object.values(sectionProps.footers || {}).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
 
             const toTypeIndex = (resolvedDefinitions: DocumentElement[]) => (type: string, index: number): { type: string; definition: DocumentElement; } => ({ type, definition: resolvedDefinitions[index] });
             const groupByType = (byType: {}, current: { type: string; definition: DocumentElement; }): {} => ({ ...byType, [current.type]: current.definition });
         
-            const headersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
-            const footersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
+            const headersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
+            const footersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
 
             const pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
             const pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
