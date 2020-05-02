@@ -657,6 +657,8 @@ export class DocumentParser {
         }
         else if (isAnchor && (posX.align == 'left' || posX.align == 'right')) {
             result.style["float"] = posX.align;
+            result.style["margin-left"] = '7pt';
+            result.style["margin-right"] = '7pt';
         }
 
         return result;
@@ -679,8 +681,31 @@ export class DocumentParser {
         var result = new Image();
         var blipFill = xml.byTagName(elem, "blipFill");
         var blip = xml.byTagName(blipFill, "blip");
+        const srcRect = xml.byTagName(blipFill, "srcRect");
+        const stretch = xml.byTagName(blipFill, "stretch");
 
         result.src = xml.stringAttr(blip, "embed");
+
+        if (srcRect) {
+            result.crop = {
+                left: xml.intAttr(srcRect, "l"),
+                right: xml.intAttr(srcRect, "r"),
+                top: xml.intAttr(srcRect, "t"),
+                bottom: xml.intAttr(srcRect, "b")
+            }
+        }
+
+        if (stretch) {
+            const fillRect = xml.byTagName(stretch, "fillRect");
+            if (fillRect) {
+                result.stretch = {
+                    left: xml.intAttr(fillRect, "l"),
+                    right: xml.intAttr(fillRect, "r"),
+                    top: xml.intAttr(fillRect, "t"),
+                    bottom: xml.intAttr(fillRect, "b")
+                }
+            }
+        }
 
         var spPr = xml.byTagName(elem, "spPr");
         var xfrm = xml.byTagName(spPr, "xfrm");

@@ -670,6 +670,8 @@ var DocumentParser = (function () {
         }
         else if (isAnchor && (posX.align == 'left' || posX.align == 'right')) {
             result.style["float"] = posX.align;
+            result.style["margin-left"] = '7pt';
+            result.style["margin-right"] = '7pt';
         }
         return result;
     };
@@ -688,7 +690,28 @@ var DocumentParser = (function () {
         var result = new image_1.Image();
         var blipFill = xml.byTagName(elem, "blipFill");
         var blip = xml.byTagName(blipFill, "blip");
+        var srcRect = xml.byTagName(blipFill, "srcRect");
+        var stretch = xml.byTagName(blipFill, "stretch");
         result.src = xml.stringAttr(blip, "embed");
+        if (srcRect) {
+            result.crop = {
+                left: xml.intAttr(srcRect, "l"),
+                right: xml.intAttr(srcRect, "r"),
+                top: xml.intAttr(srcRect, "t"),
+                bottom: xml.intAttr(srcRect, "b")
+            };
+        }
+        if (stretch) {
+            var fillRect = xml.byTagName(stretch, "fillRect");
+            if (fillRect) {
+                result.stretch = {
+                    left: xml.intAttr(fillRect, "l"),
+                    right: xml.intAttr(fillRect, "r"),
+                    top: xml.intAttr(fillRect, "t"),
+                    bottom: xml.intAttr(fillRect, "b")
+                };
+            }
+        }
         var spPr = xml.byTagName(elem, "spPr");
         var xfrm = xml.byTagName(spPr, "xfrm");
         result.style["position"] = "relative";
@@ -1967,11 +1990,31 @@ var Image = (function (_super) {
     }
     Image.prototype.render = function (ctx) {
         var result = ctx.html.createElement("img");
-        element_base_1.renderStyleValues(this.style, result);
+        console.log(this);
         if (ctx.document) {
             ctx.document.loadDocumentImage(this.src).then(function (x) {
                 result.src = x;
             });
+        }
+        if (this.crop) {
+            var cropWrapper = ctx.html.createElement("div");
+            cropWrapper.appendChild(result);
+            element_base_1.renderStyleValues(this.style, cropWrapper);
+            cropWrapper.style.overflow = "hidden";
+            var width = parseInt(cropWrapper.style.width.replace('pt', ''));
+            var height = parseInt(cropWrapper.style.height.replace('pt', ''));
+            var imageWidth = width / (1 - (this.crop.left / 100000) - (this.crop.right / 100000));
+            var imageHeight = height / (1 - (this.crop.top / 100000) - (this.crop.bottom / 100000));
+            result.style.marginLeft = "-" + imageWidth * this.crop.left / 100000 + "pt";
+            result.style.marginRight = "-" + imageWidth * this.crop.right / 100000 + "pt";
+            result.style.marginTop = "-" + imageHeight * this.crop.top / 100000 + "pt";
+            result.style.marginBottom = "-" + imageHeight * this.crop.bottom / 100000 + "pt";
+            result.style.width = imageWidth + "pt";
+            result.style.height = imageHeight + "pt";
+            return cropWrapper;
+        }
+        else {
+            element_base_1.renderStyleValues(this.style, result);
         }
         return result;
     };
