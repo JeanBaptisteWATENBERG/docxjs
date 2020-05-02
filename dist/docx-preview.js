@@ -723,6 +723,26 @@ var DocumentParser = (function () {
                     break;
             }
         });
+        result.children.forEach(function (row, rowIndex) {
+            if (row instanceof row_1.Row) {
+                row.children.forEach(function (cell, cellIndex) {
+                    if (cell instanceof cell_1.Cell && cell.props.vMerge === 'restart') {
+                        var rowSpan = 1;
+                        for (var i = rowIndex + 1; i < result.children.length; i++) {
+                            var nextRow = result.children[i];
+                            if (nextRow instanceof row_1.Row) {
+                                var nextCell = nextRow.children[cellIndex];
+                                rowSpan++;
+                                if (nextCell instanceof cell_1.Cell && nextCell.props.vMerge === 'end') {
+                                    break;
+                                }
+                            }
+                        }
+                        cell.props.rowSpan = rowSpan;
+                    }
+                });
+            }
+        });
         return result;
     };
     DocumentParser.prototype.parseTableColumns = function (node) {
@@ -831,6 +851,9 @@ var DocumentParser = (function () {
                     cell.props.gridSpan = xml.intAttr(c, "val", null);
                     break;
                 case "vMerge":
+                    cell.props.vMerge = xml.stringAttr(c, "val");
+                    if (!cell.props.vMerge)
+                        cell.props.vMerge = 'end';
                     break;
                 case "cnfStyle":
                     cell.className = values.classNameOfCnfStyle(c);
@@ -921,7 +944,7 @@ var DocumentParser = (function () {
                     style["table-layout"] = values.valueOfTblLayout(c);
                     break;
                 case "vAlign":
-                    style["vertical-align"] = xml.stringAttr(c, "val");
+                    style["vertical-align"] = values.valueOfTextAlignment(c);
                     break;
                 case "spacing":
                     if (elem.localName == "pPr")
@@ -1002,7 +1025,7 @@ var DocumentParser = (function () {
         var line = xml.intAttr(node, "line", null);
         var lineRule = xml.stringAttr(node, "lineRule");
         style["margin-top"] = '2pt';
-        if (before)
+        if (before && before !== '0.00pt')
             style["margin-top"] = before;
         if (after)
             style["margin-bottom"] = after;
@@ -1723,6 +1746,12 @@ var Cell = (function (_super) {
         var elem = this.renderContainer(ctx, "td");
         if (this.props.gridSpan)
             elem.colSpan = this.props.gridSpan;
+        if (this.props.rowSpan) {
+            elem.rowSpan = this.props.rowSpan;
+        }
+        if (this.props.vMerge && this.props.vMerge !== 'restart') {
+            return null;
+        }
         return elem;
     };
     return Cell;

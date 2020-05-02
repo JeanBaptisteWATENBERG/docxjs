@@ -17,7 +17,7 @@ import { Tab } from './elements/tab';
 import { Hyperlink } from './elements/hyperlink';
 import { Run } from './elements/run';
 import { Bookmark } from './elements/bookmark';
-import { Cell } from './elements/cell';
+import { Cell, VMerge } from './elements/cell';
 import { Table, TableColumn } from './elements/table';
 import { Row } from './elements/row';
 import { Paragraph } from './elements/paragraph';
@@ -723,6 +723,27 @@ export class DocumentParser {
             }
         });
 
+        result.children.forEach((row, rowIndex) => {
+            if (row instanceof Row) {
+                row.children.forEach((cell, cellIndex) => {
+                    if (cell instanceof Cell && cell.props.vMerge === 'restart') {
+                        let rowSpan = 1;
+                        for (let i = rowIndex + 1; i < result.children.length; i++) {
+                            const nextRow = result.children[i];
+                            if (nextRow instanceof Row) {
+                                const nextCell = nextRow.children[cellIndex];
+                                rowSpan++;
+                                if (nextCell instanceof Cell && nextCell.props.vMerge === 'end') {
+                                    break;
+                                }
+                            }
+                        }
+                        cell.props.rowSpan = rowSpan;
+                    }
+                });
+            }
+        });
+
         return result;
     }
 
@@ -854,7 +875,10 @@ export class DocumentParser {
                     cell.props.gridSpan = xml.intAttr(c, "val", null);
                     break;
 
-                case "vMerge": //TODO
+                case "vMerge":
+                    cell.props.vMerge = xml.stringAttr(c, "val") as VMerge;
+                    if (!cell.props.vMerge) 
+                        cell.props.vMerge = 'end'
                     break;
 
                 case "cnfStyle":
@@ -972,7 +996,7 @@ export class DocumentParser {
                     break;
 
                 case "vAlign":
-                    style["vertical-align"] = xml.stringAttr(c, "val");
+                    style["vertical-align"] = values.valueOfTextAlignment(c);
                     break;
 
                 case "spacing":
@@ -1071,7 +1095,7 @@ export class DocumentParser {
         var lineRule = xml.stringAttr(node, "lineRule");
 
         style["margin-top"] = '2pt';
-        if (before) style["margin-top"] = before;
+        if (before && before !== '0.00pt') style["margin-top"] = before;
         if (after) style["margin-bottom"] = after;
         
         if (line !== null) {
