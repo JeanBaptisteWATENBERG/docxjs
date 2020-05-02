@@ -219,6 +219,7 @@ export class HtmlRenderer {
 
             const pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
             const pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
+            // TODO check why header are parsed only page 4 console.log(section, sectionProps, headersByType, pickedHeader, sectionNumber)
 
             const sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);
 

@@ -757,10 +757,10 @@ export class DocumentParser {
                             const nextRow = result.children[i];
                             if (nextRow instanceof Row) {
                                 const nextCell = nextRow.children[cellIndex];
-                                rowSpan++;
-                                if (nextCell instanceof Cell && nextCell.props.vMerge === 'end') {
+                                if (nextCell instanceof Cell && !nextCell.props.vMerge) {
                                     break;
                                 }
+                                rowSpan++;
                             }
                         }
                         cell.props.rowSpan = rowSpan;
@@ -903,7 +903,7 @@ export class DocumentParser {
                 case "vMerge":
                     cell.props.vMerge = xml.stringAttr(c, "val") as VMerge;
                     if (!cell.props.vMerge) 
-                        cell.props.vMerge = 'end'
+                        cell.props.vMerge = 'continue'
                     break;
 
                 case "cnfStyle":

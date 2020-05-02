@@ -755,10 +755,10 @@ var DocumentParser = (function () {
                             var nextRow = result.children[i];
                             if (nextRow instanceof row_1.Row) {
                                 var nextCell = nextRow.children[cellIndex];
-                                rowSpan++;
-                                if (nextCell instanceof cell_1.Cell && nextCell.props.vMerge === 'end') {
+                                if (nextCell instanceof cell_1.Cell && !nextCell.props.vMerge) {
                                     break;
                                 }
+                                rowSpan++;
                             }
                         }
                         cell.props.rowSpan = rowSpan;
@@ -876,7 +876,7 @@ var DocumentParser = (function () {
                 case "vMerge":
                     cell.props.vMerge = xml.stringAttr(c, "val");
                     if (!cell.props.vMerge)
-                        cell.props.vMerge = 'end';
+                        cell.props.vMerge = 'continue';
                     break;
                 case "cnfStyle":
                     cell.className = values.classNameOfCnfStyle(c);
@@ -1772,6 +1772,8 @@ var Cell = (function (_super) {
         if (this.props.rowSpan) {
             elem.rowSpan = this.props.rowSpan;
         }
+        if (this.props.vMerge)
+            console.log(this);
         if (this.props.vMerge && this.props.vMerge !== 'restart') {
             return null;
         }
