@@ -24,7 +24,7 @@ export class Cell extends ContainerBase {
     }
 }
 
-export type VMerge = 'continue' | 'restart' | 'end';
+export type VMerge = 'continue' | 'restart';
 export interface CellProperties {
     gridSpan: number;
     vMerge: VMerge;

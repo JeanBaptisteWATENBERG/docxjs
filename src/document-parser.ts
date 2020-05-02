@@ -757,7 +757,7 @@ export class DocumentParser {
                             const nextRow = result.children[i];
                             if (nextRow instanceof Row) {
                                 const nextCell = nextRow.children[cellIndex];
-                                if (nextCell instanceof Cell && !nextCell.props.vMerge) {
+                                if (nextCell instanceof Cell && (!nextCell.props.vMerge || nextCell.props.vMerge === 'restart')) {
                                     break;
                                 }
                                 rowSpan++;

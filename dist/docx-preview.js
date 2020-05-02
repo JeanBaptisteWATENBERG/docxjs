@@ -755,7 +755,7 @@ var DocumentParser = (function () {
                             var nextRow = result.children[i];
                             if (nextRow instanceof row_1.Row) {
                                 var nextCell = nextRow.children[cellIndex];
-                                if (nextCell instanceof cell_1.Cell && !nextCell.props.vMerge) {
+                                if (nextCell instanceof cell_1.Cell && (!nextCell.props.vMerge || nextCell.props.vMerge === 'restart')) {
                                     break;
                                 }
                                 rowSpan++;
