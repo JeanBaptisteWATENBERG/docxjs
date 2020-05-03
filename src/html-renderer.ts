@@ -9,6 +9,8 @@ import { Paragraph } from './elements/paragraph';
 import { Run } from './elements/run';
 import { Table } from './elements/table';
 import { RenderContext } from './dom/render-context';
+import { Section } from './elements/section';
+import { Drawing } from './elements/drawing';
 
 export class HtmlRenderer {
 
@@ -163,9 +165,10 @@ export class HtmlRenderer {
         return output;
     }
 
-    createSection(className: string, props: SectionProperties, header?: DocumentElement, footer?: DocumentElement) {
+    createSection(className: string, props: SectionProperties, header?: string, footer?: string) {
         var elem = this.htmlDocument.createElement("section");
         
+        elem.style.position = "relative";
         elem.className = className;
 
         if (props) {
@@ -201,51 +204,58 @@ export class HtmlRenderer {
 
         this.processElement(document);
 
-        const sections = this.splitBySection(document.children);
+        const sections = document.children;
         let sectionNumber = 1;
 
         while (sections.length > 0) {
             this._renderContext.currentPageNumber = sectionNumber;
             const section = sections.shift();
-            const sectionProps = section.sectProps || document.props;
-            const resolvedHeaderDefinitions = await Promise.all(Object.values(sectionProps.headers || {}).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
-            const resolvedFooterDefinitions = await Promise.all(Object.values(sectionProps.footers || {}).map(({refId}) => this.document.loadHeaderOrFooter(refId)));
 
-            const toTypeIndex = (resolvedDefinitions: DocumentElement[]) => (type: string, index: number): { type: string; definition: DocumentElement; } => ({ type, definition: resolvedDefinitions[index] });
-            const groupByType = (byType: {}, current: { type: string; definition: DocumentElement; }): {} => ({ ...byType, [current.type]: current.definition });
-        
-            const headersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
-            const footersByType: {[type in HeaderAndFooterType]: DocumentElement} | {} = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
+            if (!(section instanceof Section)) {
+                return [];
+            }
 
-            const pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
-            const pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
+            const sectionProps = section.props;
+            const pickedHeaderRef = this.pickHeaderOrFooterRef(sectionProps.headers || {}, sectionNumber);
+            const pickedFooterRef = this.pickHeaderOrFooterRef(sectionProps.footers || {}, sectionNumber);
+
             // TODO check why header are parsed only page 4 console.log(section, sectionProps, headersByType, pickedHeader, sectionNumber)
 
-            const sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);
+            const sectionElement = this.createSection(this.className, sectionProps, pickedHeaderRef, pickedFooterRef);
 
             into.appendChild(sectionElement);
 
-            if (pickedHeader) {
-                const header = this.htmlDocument.createElement("header");
-                this.renderElements(pickedHeader.children, header);
-                sectionElement.appendChild(header);
+            if (pickedHeaderRef) {
+                const pickedHeader = await this.document.loadAndSetRenderContextToHeaderOrFooter(pickedHeaderRef);
+                if (pickedHeader) {
+                    const header = this.htmlDocument.createElement("header");
+                    this.renderElements(pickedHeader.children, header);
+                    sectionElement.appendChild(header);
+                }
             }
 
             const main = this.htmlDocument.createElement("main");
             sectionElement.appendChild(main);
 
-            if (pickedFooter) {
-                const footer = this.htmlDocument.createElement("footer");
-                this.renderElements(pickedFooter.children, footer);
-                sectionElement.appendChild(footer);
+            if (pickedFooterRef) {
+                const pickedFooter = await this.document.loadAndSetRenderContextToHeaderOrFooter(pickedFooterRef);
+                if (pickedFooter) {
+                    const footer = this.htmlDocument.createElement("footer");
+                    this.renderElements(pickedFooter.children, footer);
+                    sectionElement.appendChild(footer);
+                }
             }
 
-            const {remainingElementsAfterConstraintReached} = this.renderElements(section.elements, main, true);
+            this.document.setRenderContextToMainDocument();
+
+            const {remainingElementsAfterConstraintReached} = this.renderElements(section.children, main, true);
             if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
                 if (sections.length > 0) {
-                    sections[0].elements.unshift(...remainingElementsAfterConstraintReached);
+                    sections[0].children.unshift(...remainingElementsAfterConstraintReached);
                 } else {
-                    const newSection = { sectProps: sectionProps, elements: remainingElementsAfterConstraintReached };
+                    const newSection = new Section();
+                    newSection.props = sectionProps;
+                    newSection.children = remainingElementsAfterConstraintReached;
                     sections.push(newSection);
                 }
             }
@@ -259,19 +269,24 @@ export class HtmlRenderer {
         return result;
     }
 
-    private pickHeaderOrFooter(headersOrFootersByType: {[type in HeaderAndFooterType]: DocumentElement} | {}, sectionNumber: number): DocumentElement | undefined {
+    private pickHeaderOrFooterRef(headersOrFootersByType: {[type in HeaderAndFooterType]: {refId: string}} | {}, sectionNumber: number): string | undefined {
         if (headersOrFootersByType['first'] && sectionNumber === 1) {
-            return headersOrFootersByType['first'];
+            return headersOrFootersByType['first'].refId;
         }
         else if (headersOrFootersByType['even'] && sectionNumber % 2 === 0) {
-            return headersOrFootersByType['even'];
+            return headersOrFootersByType['even'].refId;
         }
         else if (headersOrFootersByType['default']) {
-            return headersOrFootersByType['default'];
+            return headersOrFootersByType['default'].refId;
         }
         return undefined;
     }
 
+    /**
+     * 
+     * @param elements 
+     * @Deprecated
+     */
     splitBySection(elements: OpenXmlElement[]): { sectProps: SectionProperties, elements: OpenXmlElement[] }[] {
         var current = { sectProps: null, elements: [] };
         var result = [current];
@@ -303,6 +318,10 @@ export class HtmlRenderer {
                         rBreakIndex = r.children?.findIndex(t => (t instanceof Break) && t.break == "page") ?? -1;
                         return rBreakIndex != -1;
                     });
+                }
+
+                if (!sectProps) {
+
                 }
     
                 if(sectProps || pBreakIndex != -1) {
@@ -477,36 +496,43 @@ export class HtmlRenderer {
         return createStyleElement(styleText);
     }
 
-    renderElements(elems: OpenXmlElement[], into?: HTMLElement, heightConstrained?: boolean): {renderedElements: Node[], remainingElementsAfterConstraintReached: OpenXmlElement[]} {
+    renderElements<T extends OpenXmlElement>(elems: T[], into?: HTMLElement, heightConstrained?: boolean): {renderedElements: Node[], remainingElementsAfterConstraintReached: T[]} {
         if(elems == null)
             return null;
 
-        var result = elems.map((e: ElementBase) => ({originalElement: e, renderedElement: e.render(this._renderContext)})).filter(e => e.renderedElement != null);
+        const appendedElements = [];
+        const remainingElements = [...elems];
 
         if(into) {
-            const appendedElements = [];
-            const remainingElements = [...result];
-            for(let c of result) {
+            for(let c of elems) {
+                if (!(c instanceof ElementBase)) {
+                    continue;
+                }
+                const renderedElement = c.render(this._renderContext);
+                if (!renderedElement) {
+                    continue;
+                }
+
                 const containerBeforeHeight = into.getBoundingClientRect().height;
-                into.appendChild(c.renderedElement);
+                into.appendChild(renderedElement);
                 const containerAfterHeight = into.getBoundingClientRect().height;
-                const containsPageBreak = (c.renderedElement as HTMLElement).querySelector('.page-break');
+                const containsPageBreak = (renderedElement as HTMLElement).querySelector('.page-break');
                 
                 if (containsPageBreak) {
-                    appendedElements.push(c.renderedElement);
+                    appendedElements.push(renderedElement);
                     remainingElements.shift();
-                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(e => e.originalElement) };
+                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 } else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
-                    into.removeChild(c.renderedElement);
-                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(e => e.originalElement) };
+                    into.removeChild(renderedElement);
+                    return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 } else {
-                    appendedElements.push(c.renderedElement);
+                    appendedElements.push(renderedElement);
                     remainingElements.shift();
                 }
             }
         }
 
-        return {renderedElements: result.map(e => e.renderedElement), remainingElementsAfterConstraintReached: [] };
+        return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: [] };
     }
 
     numberingClass(id: string, lvl: number) {

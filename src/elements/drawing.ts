@@ -3,13 +3,14 @@ import { RenderContext } from "../dom/render-context";
 
 export class Drawing extends ContainerBase {
 
+    posX = null;
+    posY = null;
     style = {};
 
     render(ctx: RenderContext): Node {
         var elem = this.renderContainer(ctx, "div");
 
         elem.style.display = "inline-block";
-        elem.style.position = "relative";
         elem.style.textIndent = "0px";
 
         return elem 

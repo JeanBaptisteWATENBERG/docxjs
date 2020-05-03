@@ -34,6 +34,8 @@ export class Document {
     numbering: IDomNumbering[] = null;
     document: DocumentElement = null;
 
+    renderContextRelations: IDomRelationship[] = null;
+
     static load(blob, parser: DocumentParser): PromiseLike<Document> {
         var d = new Document();
         d.parser = parser;
@@ -44,7 +46,7 @@ export class Document {
     }
 
     loadDocumentImage(id: string): PromiseLike<string> {
-        return this.loadResource(this.docRelations, id, "blob")
+        return this.loadResource(this.renderContextRelations, id, "blob")
             .then(x => x ? URL.createObjectURL(x) : null);
     }
 
@@ -58,14 +60,33 @@ export class Document {
             .then(x => x ? URL.createObjectURL(new Blob([deobfuscate(x, key)])) : x);
     }
 
-    loadHeaderOrFooter(id: string): PromiseLike<DocumentElement> {
+    async loadAndSetRenderContextToHeaderOrFooter(id: string): Promise<DocumentElement> {
+        const headerOrFooterPath = this.getResoucePath(this.docRelations, id);
+        const headerOrFooterRelationsPath = normalizePath(this.getRelPath(headerOrFooterPath));
+        const relationsFile = this.zip.files[headerOrFooterRelationsPath];
+        if (relationsFile) {
+            const relationsXml = await relationsFile.async("text");
+            this.renderContextRelations = this.parser.parseDocumentRelationsFile(relationsXml);
+        }
+
         return this.loadResource(this.docRelations, id, "text")
             .then(resource => resource ? this.parser.parseHeaderOrFooter(resource) : null);
     }
 
+    setRenderContextToMainDocument() {
+        this.renderContextRelations = this.docRelations;
+    }
+
     getHyperlinkTarget(id: string): string  {
-        const rel = this.docRelations.find(x => x.id == id);
+        const rel = this.renderContextRelations.find(x => x.id == id);
         return rel.target;
+    }
+
+    private getRelPath(path: string): string {
+        if (!path) return path;
+        const beginning = path.substr(0, path.lastIndexOf("/") + 1);
+        const remaining = path.replace(beginning, "");
+        return beginning + "_rels/" + remaining + ".rels";
     }
 
     private loadContentType() {
@@ -77,17 +98,10 @@ export class Document {
         return contentTypePart.async("text").then(xml => {
             const parts = this.parser.parseContentTypeFile(xml);
 
-            const getRelPath = (path: string) => {
-                if (!path) return path;
-                const beginning = path.substr(0, path.lastIndexOf("/") + 1);
-                const remaining = path.replace(beginning, "");
-                return beginning + "_rels/" + remaining + ".rels";
-            }
-
             const files = [
-                this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document)))),
-                this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable)))),
-                this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering)))),
+                this.loadPart(PartType.DocumentRelations, normalizePath(this.getRelPath(parts.get(PartType.Document)))),
+                this.loadPart(PartType.FontRelations, normalizePath(this.getRelPath(parts.get(PartType.FontTable)))),
+                this.loadPart(PartType.NumberingRelations, normalizePath(this.getRelPath(parts.get(PartType.Numbering)))),
                 this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style))),
                 this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable))),
                 this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering))),
@@ -98,9 +112,18 @@ export class Document {
         })
     }
 
+    private resolvePath(path: string): string {
+        return normalizePath(path.replace(/([^/]+)\/\.\./g,""))
+    }
+
+    private getResoucePath(relations: IDomRelationship[], id: string) {
+        const rel = relations.find(x => x.id == id);
+        return rel ? rel.target.startsWith("/") ? normalizePath(rel.target) : this.resolvePath("word/" + rel.target) : null;
+    }
+
     private loadResource(relations: IDomRelationship[], id: string, outputType: JSZip.OutputType = "base64") {
-        let rel = relations.find(x => x.id == id);
-        return rel ? this.zip.files[rel.target.startsWith("/") ? normalizePath(rel.target) : ("word/" + rel.target)].async(outputType) : Promise.resolve(null);
+        const path = this.getResoucePath(relations, id);
+        return path ? this.zip.files[path].async(outputType) : Promise.resolve(null);
     }
 
     private loadPart(part: PartType, partPath: string) {

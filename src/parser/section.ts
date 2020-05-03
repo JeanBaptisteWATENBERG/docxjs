@@ -1,4 +1,4 @@
-import { SectionProperties, HeaderAndFooterType } from "../dom/document";
+import { SectionProperties } from "../dom/document";
 import { ns, Columns, Column } from "../dom/common";
 import * as xml from './common';
 

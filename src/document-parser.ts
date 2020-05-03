@@ -25,6 +25,7 @@ import { Image } from './elements/image';
 import { Drawing } from './elements/drawing';
 import { ElementBase } from './elements/element-base';
 import { deserialize } from './parser/xml-serialize';
+import { Section } from './elements/section';
 
 export var autos = {
     shd: "white",
@@ -84,18 +85,27 @@ export class DocumentParser {
 
         var xbody = xml.byTagName(xml.parse(xmlString, this.skipDeclaration), "body");
 
+        let section = new Section();
+
         xml.foreach(xbody, elem => {
             switch (elem.localName) {
                 case "p":
-                    result.children.push(this.parseParagraph(elem));
+                    const paragraph = this.parseParagraph(elem);
+                    if (paragraph.props.sectionProps) {
+                        section.props = paragraph.props.sectionProps;
+                        result.children.push(section);
+                        section = new Section();
+                    }
+                    section.children.push(paragraph);
                     break;
 
                 case "tbl":
-                    result.children.push(this.parseTable(elem));
+                    section.children.push(this.parseTable(elem));
                     break;
 
                 case "sectPr":
-                    result.props = parseSectionProperties(elem);
+                    section.props = parseSectionProperties(elem);
+                    result.children.push(section);
                     break;
             }
         });
@@ -607,9 +617,14 @@ export class DocumentParser {
                 case "positionH":
                 case "positionV":
                     if (!simplePos) {
-                        let pos = n.localName == "positionH" ? posX : posY;
-                        var alignNode = xml.byTagName(n, "align");
-                        var offsetNode = xml.byTagName(n, "posOffset");
+                        const pos = n.localName == "positionH" ? posX : posY;
+                        const relativeFrom = xml.stringAttr(n, "relativeFrom");
+
+                        const alignNode = xml.byTagName(n, "align");
+                        const offsetNode = xml.byTagName(n, "posOffset");
+
+                        if (relativeFrom)
+                            pos.relative = relativeFrom
 
                         if (alignNode)
                             pos.align = alignNode.textContent;
@@ -655,11 +670,19 @@ export class DocumentParser {
             if(posY.offset)
                 result.style["top"] = posY.offset;
         }
+        else if (isAnchor && !simplePos) {
+            result.style['position'] = 'absolute';
+            result.style['top'] = posY.offset;
+            result.style['left'] = posX.offset;
+        }
         else if (isAnchor && (posX.align == 'left' || posX.align == 'right')) {
             result.style["float"] = posX.align;
             result.style["margin-left"] = '7pt';
             result.style["margin-right"] = '7pt';
         }
+
+        result.posX = posX;
+        result.posY = posY;
 
         return result;
     }

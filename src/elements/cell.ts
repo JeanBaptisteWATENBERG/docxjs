@@ -14,8 +14,6 @@ export class Cell extends ContainerBase {
             elem.rowSpan = this.props.rowSpan;
         }
 
-        if(this.props.vMerge) console.log(this)
-
         if(this.props.vMerge && this.props.vMerge !== 'restart') {
             return null;
         }

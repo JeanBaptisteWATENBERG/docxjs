@@ -127,6 +127,7 @@ var paragraph_2 = __webpack_require__(/*! ./elements/paragraph */ "./src/element
 var image_1 = __webpack_require__(/*! ./elements/image */ "./src/elements/image.ts");
 var drawing_1 = __webpack_require__(/*! ./elements/drawing */ "./src/elements/drawing.ts");
 var xml_serialize_1 = __webpack_require__(/*! ./parser/xml-serialize */ "./src/parser/xml-serialize.ts");
+var section_2 = __webpack_require__(/*! ./elements/section */ "./src/elements/section.ts");
 exports.autos = {
     shd: "white",
     color: "black",
@@ -178,16 +179,24 @@ var DocumentParser = (function () {
             props: null
         };
         var xbody = xml.byTagName(xml.parse(xmlString, this.skipDeclaration), "body");
+        var section = new section_2.Section();
         xml.foreach(xbody, function (elem) {
             switch (elem.localName) {
                 case "p":
-                    result.children.push(_this.parseParagraph(elem));
+                    var paragraph = _this.parseParagraph(elem);
+                    if (paragraph.props.sectionProps) {
+                        section.props = paragraph.props.sectionProps;
+                        result.children.push(section);
+                        section = new section_2.Section();
+                    }
+                    section.children.push(paragraph);
                     break;
                 case "tbl":
-                    result.children.push(_this.parseTable(elem));
+                    section.children.push(_this.parseTable(elem));
                     break;
                 case "sectPr":
-                    result.props = section_1.parseSectionProperties(elem);
+                    section.props = section_1.parseSectionProperties(elem);
+                    result.children.push(section);
                     break;
             }
         });
@@ -630,8 +639,11 @@ var DocumentParser = (function () {
                 case "positionV":
                     if (!simplePos) {
                         var pos = n.localName == "positionH" ? posX : posY;
+                        var relativeFrom = xml.stringAttr(n, "relativeFrom");
                         var alignNode = xml.byTagName(n, "align");
                         var offsetNode = xml.byTagName(n, "posOffset");
+                        if (relativeFrom)
+                            pos.relative = relativeFrom;
                         if (alignNode)
                             pos.align = alignNode.textContent;
                         if (offsetNode)
@@ -668,11 +680,18 @@ var DocumentParser = (function () {
             if (posY.offset)
                 result.style["top"] = posY.offset;
         }
+        else if (isAnchor && !simplePos) {
+            result.style['position'] = 'absolute';
+            result.style['top'] = posY.offset;
+            result.style['left'] = posX.offset;
+        }
         else if (isAnchor && (posX.align == 'left' || posX.align == 'right')) {
             result.style["float"] = posX.align;
             result.style["margin-left"] = '7pt';
             result.style["margin-right"] = '7pt';
         }
+        result.posX = posX;
+        result.posY = posY;
         return result;
     };
     DocumentParser.prototype.parseGraphic = function (elem) {
@@ -1373,6 +1392,42 @@ var values = (function () {
 
 "use strict";
 
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (_) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var JSZip = __webpack_require__(/*! jszip */ "jszip");
 var PartType;
@@ -1398,6 +1453,7 @@ var Document = (function () {
         this.fonts = null;
         this.numbering = null;
         this.document = null;
+        this.renderContextRelations = null;
     }
     Document.load = function (blob, parser) {
         var d = new Document();
@@ -1407,7 +1463,7 @@ var Document = (function () {
         });
     };
     Document.prototype.loadDocumentImage = function (id) {
-        return this.loadResource(this.docRelations, id, "blob")
+        return this.loadResource(this.renderContextRelations, id, "blob")
             .then(function (x) { return x ? URL.createObjectURL(x) : null; });
     };
     Document.prototype.loadNumberingImage = function (id) {
@@ -1418,14 +1474,41 @@ var Document = (function () {
         return this.loadResource(this.fontRelations, id, "uint8array")
             .then(function (x) { return x ? URL.createObjectURL(new Blob([deobfuscate(x, key)])) : x; });
     };
-    Document.prototype.loadHeaderOrFooter = function (id) {
-        var _this = this;
-        return this.loadResource(this.docRelations, id, "text")
-            .then(function (resource) { return resource ? _this.parser.parseHeaderOrFooter(resource) : null; });
+    Document.prototype.loadAndSetRenderContextToHeaderOrFooter = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            var headerOrFooterPath, headerOrFooterRelationsPath, relationsFile, relationsXml;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        headerOrFooterPath = this.getResoucePath(this.docRelations, id);
+                        headerOrFooterRelationsPath = normalizePath(this.getRelPath(headerOrFooterPath));
+                        relationsFile = this.zip.files[headerOrFooterRelationsPath];
+                        if (!relationsFile) return [3, 2];
+                        return [4, relationsFile.async("text")];
+                    case 1:
+                        relationsXml = _a.sent();
+                        this.renderContextRelations = this.parser.parseDocumentRelationsFile(relationsXml);
+                        _a.label = 2;
+                    case 2: return [2, this.loadResource(this.docRelations, id, "text")
+                            .then(function (resource) { return resource ? _this.parser.parseHeaderOrFooter(resource) : null; })];
+                }
+            });
+        });
+    };
+    Document.prototype.setRenderContextToMainDocument = function () {
+        this.renderContextRelations = this.docRelations;
     };
     Document.prototype.getHyperlinkTarget = function (id) {
-        var rel = this.docRelations.find(function (x) { return x.id == id; });
+        var rel = this.renderContextRelations.find(function (x) { return x.id == id; });
         return rel.target;
+    };
+    Document.prototype.getRelPath = function (path) {
+        if (!path)
+            return path;
+        var beginning = path.substr(0, path.lastIndexOf("/") + 1);
+        var remaining = path.replace(beginning, "");
+        return beginning + "_rels/" + remaining + ".rels";
     };
     Document.prototype.loadContentType = function () {
         var _this = this;
@@ -1435,17 +1518,10 @@ var Document = (function () {
         }
         return contentTypePart.async("text").then(function (xml) {
             var parts = _this.parser.parseContentTypeFile(xml);
-            var getRelPath = function (path) {
-                if (!path)
-                    return path;
-                var beginning = path.substr(0, path.lastIndexOf("/") + 1);
-                var remaining = path.replace(beginning, "");
-                return beginning + "_rels/" + remaining + ".rels";
-            };
             var files = [
-                _this.loadPart(PartType.DocumentRelations, normalizePath(getRelPath(parts.get(PartType.Document)))),
-                _this.loadPart(PartType.FontRelations, normalizePath(getRelPath(parts.get(PartType.FontTable)))),
-                _this.loadPart(PartType.NumberingRelations, normalizePath(getRelPath(parts.get(PartType.Numbering)))),
+                _this.loadPart(PartType.DocumentRelations, normalizePath(_this.getRelPath(parts.get(PartType.Document)))),
+                _this.loadPart(PartType.FontRelations, normalizePath(_this.getRelPath(parts.get(PartType.FontTable)))),
+                _this.loadPart(PartType.NumberingRelations, normalizePath(_this.getRelPath(parts.get(PartType.Numbering)))),
                 _this.loadPart(PartType.Style, normalizePath(parts.get(PartType.Style))),
                 _this.loadPart(PartType.FontTable, normalizePath(parts.get(PartType.FontTable))),
                 _this.loadPart(PartType.Numbering, normalizePath(parts.get(PartType.Numbering))),
@@ -1454,10 +1530,17 @@ var Document = (function () {
             return Promise.all(files.filter(function (x) { return x != null; }));
         });
     };
+    Document.prototype.resolvePath = function (path) {
+        return normalizePath(path.replace(/([^/]+)\/\.\./g, ""));
+    };
+    Document.prototype.getResoucePath = function (relations, id) {
+        var rel = relations.find(function (x) { return x.id == id; });
+        return rel ? rel.target.startsWith("/") ? normalizePath(rel.target) : this.resolvePath("word/" + rel.target) : null;
+    };
     Document.prototype.loadResource = function (relations, id, outputType) {
         if (outputType === void 0) { outputType = "base64"; }
-        var rel = relations.find(function (x) { return x.id == id; });
-        return rel ? this.zip.files[rel.target.startsWith("/") ? normalizePath(rel.target) : ("word/" + rel.target)].async(outputType) : Promise.resolve(null);
+        var path = this.getResoucePath(relations, id);
+        return path ? this.zip.files[path].async(outputType) : Promise.resolve(null);
     };
     Document.prototype.loadPart = function (part, partPath) {
         var _this = this;
@@ -1772,8 +1855,6 @@ var Cell = (function (_super) {
         if (this.props.rowSpan) {
             elem.rowSpan = this.props.rowSpan;
         }
-        if (this.props.vMerge)
-            console.log(this);
         if (this.props.vMerge && this.props.vMerge !== 'restart') {
             return null;
         }
@@ -1814,13 +1895,14 @@ var Drawing = (function (_super) {
     __extends(Drawing, _super);
     function Drawing() {
         var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.posX = null;
+        _this.posY = null;
         _this.style = {};
         return _this;
     }
     Drawing.prototype.render = function (ctx) {
         var elem = this.renderContainer(ctx, "div");
         elem.style.display = "inline-block";
-        elem.style.position = "relative";
         elem.style.textIndent = "0px";
         return elem;
     };
@@ -1876,7 +1958,12 @@ var ContainerBase = (function (_super) {
         renderStyleValues(this.style, elem);
         if (this.className)
             elem.className = utils_1.appendClass(elem.className, this.className);
-        for (var _i = 0, _a = this.children.map(function (c) { return c.render(ctx); }).filter(function (x) { return x != null; }); _i < _a.length; _i++) {
+        for (var _i = 0, _a = this.children.map(function (c) {
+            if ((c['posX'] && c['posX'].relative !== 'page') || (c['posY'] && c['posY'].relative !== 'page')) {
+                elem.style.position = "relative";
+            }
+            return c.render(ctx);
+        }).filter(function (x) { return x != null; }); _i < _a.length; _i++) {
             var n = _a[_i];
             elem.appendChild(n);
         }
@@ -2204,6 +2291,47 @@ exports.Run = Run;
 
 /***/ }),
 
+/***/ "./src/elements/section.ts":
+/*!*********************************!*\
+  !*** ./src/elements/section.ts ***!
+  \*********************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var element_base_1 = __webpack_require__(/*! ./element-base */ "./src/elements/element-base.ts");
+var Section = (function (_super) {
+    __extends(Section, _super);
+    function Section() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.props = {};
+        return _this;
+    }
+    Section.prototype.render = function (ctx) {
+        return null;
+    };
+    return Section;
+}(element_base_1.ContainerBase));
+exports.Section = Section;
+
+
+/***/ }),
+
 /***/ "./src/elements/symbol.ts":
 /*!********************************!*\
   !*** ./src/elements/symbol.ts ***!
@@ -2501,10 +2629,12 @@ var __spreadArrays = (this && this.__spreadArrays) || function () {
     return r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+var element_base_1 = __webpack_require__(/*! ./elements/element-base */ "./src/elements/element-base.ts");
 var break_1 = __webpack_require__(/*! ./elements/break */ "./src/elements/break.ts");
 var paragraph_1 = __webpack_require__(/*! ./elements/paragraph */ "./src/elements/paragraph.ts");
 var table_1 = __webpack_require__(/*! ./elements/table */ "./src/elements/table.ts");
 var render_context_1 = __webpack_require__(/*! ./dom/render-context */ "./src/dom/render-context.ts");
+var section_1 = __webpack_require__(/*! ./elements/section */ "./src/elements/section.ts");
 var HtmlRenderer = (function () {
     function HtmlRenderer(htmlDocument) {
         this.htmlDocument = htmlDocument;
@@ -2640,6 +2770,7 @@ var HtmlRenderer = (function () {
     };
     HtmlRenderer.prototype.createSection = function (className, props, header, footer) {
         var elem = this.htmlDocument.createElement("section");
+        elem.style.position = "relative";
         elem.className = className;
         if (props) {
             if (props.pageMargins) {
@@ -2666,86 +2797,84 @@ var HtmlRenderer = (function () {
     };
     HtmlRenderer.prototype.renderSections = function (into, document) {
         return __awaiter(this, void 0, void 0, function () {
-            var result, sections, sectionNumber, section, sectionProps, resolvedHeaderDefinitions, resolvedFooterDefinitions, toTypeIndex, groupByType, headersByType, footersByType, pickedHeader, pickedFooter, sectionElement, header, main, footer, remainingElementsAfterConstraintReached, newSection;
+            var result, sections, sectionNumber, section, sectionProps, pickedHeaderRef, pickedFooterRef, sectionElement, pickedHeader, header, main, pickedFooter, footer, remainingElementsAfterConstraintReached, newSection;
             var _a;
-            var _this = this;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
                         result = [];
                         this.processElement(document);
-                        sections = this.splitBySection(document.children);
+                        sections = document.children;
                         sectionNumber = 1;
                         _b.label = 1;
                     case 1:
-                        if (!(sections.length > 0)) return [3, 4];
+                        if (!(sections.length > 0)) return [3, 6];
                         this._renderContext.currentPageNumber = sectionNumber;
                         section = sections.shift();
-                        sectionProps = section.sectProps || document.props;
-                        return [4, Promise.all(Object.values(sectionProps.headers || {}).map(function (_a) {
-                                var refId = _a.refId;
-                                return _this.document.loadHeaderOrFooter(refId);
-                            }))];
-                    case 2:
-                        resolvedHeaderDefinitions = _b.sent();
-                        return [4, Promise.all(Object.values(sectionProps.footers || {}).map(function (_a) {
-                                var refId = _a.refId;
-                                return _this.document.loadHeaderOrFooter(refId);
-                            }))];
-                    case 3:
-                        resolvedFooterDefinitions = _b.sent();
-                        toTypeIndex = function (resolvedDefinitions) { return function (type, index) { return ({ type: type, definition: resolvedDefinitions[index] }); }; };
-                        groupByType = function (byType, current) {
-                            var _a;
-                            return (__assign(__assign({}, byType), (_a = {}, _a[current.type] = current.definition, _a)));
-                        };
-                        headersByType = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedHeaderDefinitions)).reduce(groupByType, {});
-                        footersByType = Object.keys(sectionProps.headers || {}).map(toTypeIndex(resolvedFooterDefinitions)).reduce(groupByType, {});
-                        pickedHeader = this.pickHeaderOrFooter(headersByType, sectionNumber);
-                        pickedFooter = this.pickHeaderOrFooter(footersByType, sectionNumber);
-                        sectionElement = this.createSection(this.className, sectionProps, pickedHeader, pickedFooter);
+                        if (!(section instanceof section_1.Section)) {
+                            return [2, []];
+                        }
+                        sectionProps = section.props;
+                        pickedHeaderRef = this.pickHeaderOrFooterRef(sectionProps.headers || {}, sectionNumber);
+                        pickedFooterRef = this.pickHeaderOrFooterRef(sectionProps.footers || {}, sectionNumber);
+                        sectionElement = this.createSection(this.className, sectionProps, pickedHeaderRef, pickedFooterRef);
                         into.appendChild(sectionElement);
+                        if (!pickedHeaderRef) return [3, 3];
+                        return [4, this.document.loadAndSetRenderContextToHeaderOrFooter(pickedHeaderRef)];
+                    case 2:
+                        pickedHeader = _b.sent();
                         if (pickedHeader) {
                             header = this.htmlDocument.createElement("header");
                             this.renderElements(pickedHeader.children, header);
                             sectionElement.appendChild(header);
                         }
+                        _b.label = 3;
+                    case 3:
                         main = this.htmlDocument.createElement("main");
                         sectionElement.appendChild(main);
+                        if (!pickedFooterRef) return [3, 5];
+                        return [4, this.document.loadAndSetRenderContextToHeaderOrFooter(pickedFooterRef)];
+                    case 4:
+                        pickedFooter = _b.sent();
                         if (pickedFooter) {
                             footer = this.htmlDocument.createElement("footer");
                             this.renderElements(pickedFooter.children, footer);
                             sectionElement.appendChild(footer);
                         }
-                        remainingElementsAfterConstraintReached = this.renderElements(section.elements, main, true).remainingElementsAfterConstraintReached;
+                        _b.label = 5;
+                    case 5:
+                        this.document.setRenderContextToMainDocument();
+                        remainingElementsAfterConstraintReached = this.renderElements(section.children, main, true).remainingElementsAfterConstraintReached;
                         if (remainingElementsAfterConstraintReached && remainingElementsAfterConstraintReached.length > 0) {
                             if (sections.length > 0) {
-                                (_a = sections[0].elements).unshift.apply(_a, remainingElementsAfterConstraintReached);
+                                (_a = sections[0].children).unshift.apply(_a, remainingElementsAfterConstraintReached);
                             }
                             else {
-                                newSection = { sectProps: sectionProps, elements: remainingElementsAfterConstraintReached };
+                                newSection = new section_1.Section();
+                                newSection.props = sectionProps;
+                                newSection.children = remainingElementsAfterConstraintReached;
                                 sections.push(newSection);
                             }
                         }
                         result.push(sectionElement);
                         sectionNumber++;
                         return [3, 1];
-                    case 4:
+                    case 6:
                         this.htmlDocument.querySelectorAll('.total-pages').forEach(function (elem) { return elem.innerText = "" + (sectionNumber - 1); });
                         return [2, result];
                 }
             });
         });
     };
-    HtmlRenderer.prototype.pickHeaderOrFooter = function (headersOrFootersByType, sectionNumber) {
+    HtmlRenderer.prototype.pickHeaderOrFooterRef = function (headersOrFootersByType, sectionNumber) {
         if (headersOrFootersByType['first'] && sectionNumber === 1) {
-            return headersOrFootersByType['first'];
+            return headersOrFootersByType['first'].refId;
         }
         else if (headersOrFootersByType['even'] && sectionNumber % 2 === 0) {
-            return headersOrFootersByType['even'];
+            return headersOrFootersByType['even'].refId;
         }
         else if (headersOrFootersByType['default']) {
-            return headersOrFootersByType['default'];
+            return headersOrFootersByType['default'].refId;
         }
         return undefined;
     };
@@ -2774,6 +2903,8 @@ var HtmlRenderer = (function () {
                         rBreakIndex = (_b = (_a = r.children) === null || _a === void 0 ? void 0 : _a.findIndex(function (t) { return (t instanceof break_1.Break) && t.break == "page"; })) !== null && _b !== void 0 ? _b : -1;
                         return rBreakIndex != -1;
                     });
+                }
+                if (!sectProps) {
                 }
                 if (sectProps || pBreakIndex != -1) {
                     current.sectProps = sectProps;
@@ -2888,35 +3019,40 @@ var HtmlRenderer = (function () {
         return createStyleElement(styleText);
     };
     HtmlRenderer.prototype.renderElements = function (elems, into, heightConstrained) {
-        var _this = this;
         if (elems == null)
             return null;
-        var result = elems.map(function (e) { return ({ originalElement: e, renderedElement: e.render(_this._renderContext) }); }).filter(function (e) { return e.renderedElement != null; });
+        var appendedElements = [];
+        var remainingElements = __spreadArrays(elems);
         if (into) {
-            var appendedElements = [];
-            var remainingElements = __spreadArrays(result);
-            for (var _i = 0, result_1 = result; _i < result_1.length; _i++) {
-                var c = result_1[_i];
+            for (var _i = 0, elems_1 = elems; _i < elems_1.length; _i++) {
+                var c = elems_1[_i];
+                if (!(c instanceof element_base_1.ElementBase)) {
+                    continue;
+                }
+                var renderedElement = c.render(this._renderContext);
+                if (!renderedElement) {
+                    continue;
+                }
                 var containerBeforeHeight = into.getBoundingClientRect().height;
-                into.appendChild(c.renderedElement);
+                into.appendChild(renderedElement);
                 var containerAfterHeight = into.getBoundingClientRect().height;
-                var containsPageBreak = c.renderedElement.querySelector('.page-break');
+                var containsPageBreak = renderedElement.querySelector('.page-break');
                 if (containsPageBreak) {
-                    appendedElements.push(c.renderedElement);
+                    appendedElements.push(renderedElement);
                     remainingElements.shift();
-                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(function (e) { return e.originalElement; }) };
+                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 }
                 else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
-                    into.removeChild(c.renderedElement);
-                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements.map(function (e) { return e.originalElement; }) };
+                    into.removeChild(renderedElement);
+                    return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 }
                 else {
-                    appendedElements.push(c.renderedElement);
+                    appendedElements.push(renderedElement);
                     remainingElements.shift();
                 }
             }
         }
-        return { renderedElements: result.map(function (e) { return e.renderedElement; }), remainingElementsAfterConstraintReached: [] };
+        return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: [] };
     };
     HtmlRenderer.prototype.numberingClass = function (id, lvl) {
         return this.className + "-num-" + id + "-" + lvl;
