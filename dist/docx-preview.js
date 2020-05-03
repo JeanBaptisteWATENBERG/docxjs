@@ -190,6 +190,7 @@ var DocumentParser = (function () {
                         section = new section_2.Section();
                     }
                     section.children.push(paragraph);
+                    _this.checkAndMergeConsecutivePragraphBorder(section.children);
                     break;
                 case "tbl":
                     section.children.push(_this.parseTable(elem));
@@ -201,6 +202,20 @@ var DocumentParser = (function () {
             }
         });
         return result;
+    };
+    DocumentParser.prototype.checkAndMergeConsecutivePragraphBorder = function (children) {
+        if (children.length > 1 && children[children.length - 1] instanceof paragraph_2.Paragraph && children[children.length - 2] instanceof paragraph_2.Paragraph) {
+            var p1 = children[children.length - 2];
+            var p2 = children[children.length - 1];
+            if (p2.style['bdr-left'] === p1.style['bdr-left'] &&
+                p2.style['bdr-right'] === p1.style['bdr-right'] &&
+                p2.style['bdr-top'] === p1.style['bdr-top'] &&
+                p2.style['bdr-bottom'] === p1.style['bdr-bottom'] &&
+                p2.style['bdr-between'] === p1.style['bdr-between']) {
+                p2.style['border-top'] = p1.style['bdr-between'];
+                p1.style['border-bottom'] = '';
+            }
+        }
     };
     DocumentParser.prototype.parseHeaderOrFooter = function (xmlString) {
         var _this = this;
@@ -888,7 +903,7 @@ var DocumentParser = (function () {
         return result;
     };
     DocumentParser.prototype.parseTableCellProperties = function (elem, cell) {
-        cell.style = this.parseDefaultProperties(elem, {}, null, function (c) {
+        cell.style = this.parseDefaultProperties(elem, {}, cell.childrenStyle, function (c) {
             switch (c.localName) {
                 case "gridSpan":
                     cell.props.gridSpan = xml.intAttr(c, "val", null);
@@ -920,6 +935,29 @@ var DocumentParser = (function () {
                     break;
                 case "textAlignment":
                     style["vertical-align"] = values.valueOfTextAlignment(c);
+                    break;
+                case "textDirection":
+                    var textDirection = xml.stringAttr(c, "val");
+                    switch (textDirection) {
+                        case "btLr":
+                            if (childStyle) {
+                                childStyle["writing-mode"] = "vertical-rl";
+                                childStyle["transform"] = "rotate(180deg)";
+                                childStyle["width"] = "max-content";
+                                childStyle["height"] = "max-content";
+                            }
+                            else {
+                                style["writing-mode"] = "vertical-rl";
+                                style["transform"] = "rotate(180deg)";
+                            }
+                            break;
+                        case "lrTb":
+                        case "lrTbV":
+                        case "tbLrV":
+                        case "tbRl":
+                        case "tbRlV":
+                            break;
+                    }
                     break;
                 case "color":
                     style["color"] = xml.colorAttr(c, "val", null, exports.autos.color);
@@ -958,8 +996,10 @@ var DocumentParser = (function () {
                     _this.parseUnderline(c, style);
                     break;
                 case "ind":
+                    _this.parseIndentation(c, style, 'padding');
+                    break;
                 case "tblInd":
-                    _this.parseIndentation(c, style);
+                    _this.parseIndentation(c, style, 'margin');
                     break;
                 case "rFonts":
                     _this.parseFont(c, style);
@@ -1052,18 +1092,24 @@ var DocumentParser = (function () {
         if (ascii)
             style["font-family"] = ascii;
     };
-    DocumentParser.prototype.parseIndentation = function (node, style) {
+    DocumentParser.prototype.parseIndentation = function (node, style, marginOrPadding) {
         var firstLine = xml.sizeAttr(node, "firstLine");
+        var hanging = xml.sizeAttr(node, "hanging");
         var left = xml.sizeAttr(node, "left");
         var start = xml.sizeAttr(node, "start");
         var right = xml.sizeAttr(node, "right");
         var end = xml.sizeAttr(node, "end");
-        if (firstLine)
-            style["text-indent"] = firstLine;
+        var numericFirstLine = firstLine ? parseInt(firstLine.replace('pt', '')) : 0;
+        var numericHanging = hanging ? parseInt(hanging.replace('pt', '')) : 0;
+        var numericTextIndent = numericFirstLine - numericHanging;
+        if (numericTextIndent !== 0) {
+            var textIndent = numericTextIndent + "pt";
+            style["text-indent"] = textIndent;
+        }
         if (left || start)
-            style["margin-left"] = left || start;
+            style[marginOrPadding + "-left"] = left || start;
         if (right || end)
-            style["margin-right"] = right || end;
+            style[marginOrPadding + "-right"] = right || end;
     };
     DocumentParser.prototype.parseSpacing = function (node, style) {
         var before = xml.sizeAttr(node, "before");
@@ -1124,16 +1170,23 @@ var DocumentParser = (function () {
                 case "start":
                 case "left":
                     output["border-left"] = values.valueOfBorder(c);
+                    output["bdr-left"] = values.valueOfBorder(c);
                     break;
                 case "end":
                 case "right":
                     output["border-right"] = values.valueOfBorder(c);
+                    output["bdr-right"] = values.valueOfBorder(c);
                     break;
                 case "top":
                     output["border-top"] = values.valueOfBorder(c);
+                    output["bdr-top"] = values.valueOfBorder(c);
                     break;
                 case "bottom":
                     output["border-bottom"] = values.valueOfBorder(c);
+                    output["bdr-bottom"] = values.valueOfBorder(c);
+                    break;
+                case "between":
+                    output["bdr-between"] = values.valueOfBorder(c);
                     break;
             }
         });
@@ -1939,6 +1992,17 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var utils_1 = __webpack_require__(/*! ../utils */ "./src/utils.ts");
 var ElementBase = (function () {
@@ -1955,9 +2019,11 @@ var ContainerBase = (function (_super) {
     function ContainerBase() {
         var _this = _super !== null && _super.apply(this, arguments) || this;
         _this.children = [];
+        _this.childrenStyle = {};
         return _this;
     }
     ContainerBase.prototype.renderContainer = function (ctx, tagName) {
+        var _this = this;
         var elem = ctx.html.createElement(tagName);
         renderStyleValues(this.style, elem);
         if (this.className)
@@ -1965,6 +2031,9 @@ var ContainerBase = (function (_super) {
         for (var _i = 0, _a = this.children.map(function (c) {
             if ((c['posX'] && c['posX'].relative !== 'page') || (c['posY'] && c['posY'].relative !== 'page')) {
                 elem.style.position = "relative";
+            }
+            if (_this.childrenStyle) {
+                c.style = __assign(__assign({}, _this.childrenStyle), c.style);
             }
             return c.render(ctx);
         }).filter(function (x) { return x != null; }); _i < _a.length; _i++) {

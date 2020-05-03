@@ -264,7 +264,7 @@ export class HtmlRenderer {
             sectionNumber++;
         }
 
-        this.htmlDocument.querySelectorAll('.total-pages').forEach((elem: HTMLElement) => elem.innerText = `${sectionNumber - 1}`)
+        this.htmlDocument.querySelectorAll('.total-pages').forEach((elem: HTMLElement) => elem.innerText = `${sectionNumber - 1}`);
 
         return result;
     }

@@ -1,11 +1,11 @@
 import { OpenXmlElement } from "../dom/dom";
 import { RenderContext } from "../dom/render-context";
 import { appendClass } from "../utils";
-import { Drawing } from "./drawing";
 
 export abstract class ElementBase implements OpenXmlElement {
     type: any;
     parent: OpenXmlElement;
+    style: any;
 
     render(ctx: RenderContext): Node {
         return null;
@@ -14,7 +14,7 @@ export abstract class ElementBase implements OpenXmlElement {
 
 export abstract class ContainerBase extends ElementBase {
     children: ElementBase[] = [];
-    style: any;
+    childrenStyle: any = {};
     className: string;
 
     protected renderContainer<K extends keyof HTMLElementTagNameMap>(ctx: RenderContext, tagName: K): HTMLElementTagNameMap[K] {
@@ -28,6 +28,9 @@ export abstract class ContainerBase extends ElementBase {
         for(let n of this.children.map(c => {
             if ((c['posX'] && c['posX'].relative !== 'page') || (c['posY'] && c['posY'].relative !== 'page')) {
                 elem.style.position = "relative";
+            }
+            if (this.childrenStyle) {
+                c.style = {...this.childrenStyle, ...c.style};
             }
             return c.render(ctx);
         }).filter(x => x != null))

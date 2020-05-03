@@ -97,6 +97,7 @@ export class DocumentParser {
                         section = new Section();
                     }
                     section.children.push(paragraph);
+                    this.checkAndMergeConsecutivePragraphBorder(section.children);
                     break;
 
                 case "tbl":
@@ -111,6 +112,24 @@ export class DocumentParser {
         });
 
         return result;
+    }
+
+    private checkAndMergeConsecutivePragraphBorder(children: ElementBase[]) {
+        if (children.length > 1 && children[children.length - 1] instanceof Paragraph && children[children.length - 2] instanceof Paragraph) {
+            const p1 = children[children.length - 2];
+            const p2 = children[children.length - 1];
+            
+            if (
+                p2.style['bdr-left'] === p1.style['bdr-left'] &&
+                p2.style['bdr-right'] === p1.style['bdr-right'] &&
+                p2.style['bdr-top'] === p1.style['bdr-top'] &&
+                p2.style['bdr-bottom'] === p1.style['bdr-bottom'] &&
+                p2.style['bdr-between'] === p1.style['bdr-between']
+               ) {
+                   p2.style['border-top'] = p1.style['bdr-between'];
+                   p1.style['border-bottom'] = '';
+               }
+        }
     }
 
     parseHeaderOrFooter(xmlString: string) {
@@ -917,7 +936,7 @@ export class DocumentParser {
     }
 
     parseTableCellProperties(elem: Element, cell: Cell) {
-        cell.style = this.parseDefaultProperties(elem, {}, null, c => {
+        cell.style = this.parseDefaultProperties(elem, {}, cell.childrenStyle, c => {
             switch (c.localName) {
                 case "gridSpan":
                     cell.props.gridSpan = xml.intAttr(c, "val", null);
@@ -953,6 +972,30 @@ export class DocumentParser {
 
                 case "textAlignment":
                     style["vertical-align"] = values.valueOfTextAlignment(c);
+                    break;
+                
+                case "textDirection":
+                    const textDirection = xml.stringAttr(c, "val");
+                    switch(textDirection) {
+                        case "btLr":
+                            if (childStyle) {
+                                childStyle["writing-mode"] = "vertical-rl";
+                                childStyle["transform"] = "rotate(180deg)";
+                                childStyle["width"] = "max-content";
+                                childStyle["height"] = "max-content";
+                            } else {
+                                style["writing-mode"] = "vertical-rl";
+                                style["transform"] = "rotate(180deg)";
+                            }
+                            
+                            break;
+                        case "lrTb":
+                        case "lrTbV":
+                        case "tbLrV":
+                        case "tbRl":
+                        case "tbRlV":
+                            break;
+                    }
                     break;
 
                 case "color":
@@ -1004,8 +1047,10 @@ export class DocumentParser {
                     break;
 
                 case "ind":
+                    this.parseIndentation(c, style, 'padding');
+                    break;
                 case "tblInd":
-                    this.parseIndentation(c, style);
+                    this.parseIndentation(c, style, 'margin');
                     break;
 
                 case "rFonts":
@@ -1128,16 +1173,23 @@ export class DocumentParser {
             style["font-family"] = ascii;
     }
 
-    parseIndentation(node: Element, style: IDomStyleValues) {
+    parseIndentation(node: Element, style: IDomStyleValues, marginOrPadding: 'margin' | 'padding') {
         var firstLine = xml.sizeAttr(node, "firstLine");
+        var hanging = xml.sizeAttr(node, "hanging");
         var left = xml.sizeAttr(node, "left");
         var start = xml.sizeAttr(node, "start");
         var right = xml.sizeAttr(node, "right");
         var end = xml.sizeAttr(node, "end");
 
-        if (firstLine) style["text-indent"] = firstLine;
-        if (left || start) style["margin-left"] = left || start;
-        if (right || end) style["margin-right"] = right || end;
+        const numericFirstLine = firstLine ? parseInt(firstLine.replace('pt', '')) : 0;
+        const numericHanging = hanging ? parseInt(hanging.replace('pt', '')) : 0;
+        const numericTextIndent = numericFirstLine - numericHanging;
+        if (numericTextIndent !== 0) {
+            const textIndent = `${numericTextIndent}pt`;
+            style["text-indent"] = textIndent;
+        }
+        if (left || start) style[`${marginOrPadding}-left`] = left || start;
+        if (right || end) style[`${marginOrPadding}-right`] = right || end;
     }
 
     parseSpacing(node: Element, style: IDomStyleValues) {
@@ -1210,19 +1262,26 @@ export class DocumentParser {
                 case "start":
                 case "left":
                     output["border-left"] = values.valueOfBorder(c);
+                    output["bdr-left"] = values.valueOfBorder(c);
                     break;
 
                 case "end":
                 case "right":
                     output["border-right"] = values.valueOfBorder(c);
+                    output["bdr-right"] = values.valueOfBorder(c);
                     break;
 
                 case "top":
                     output["border-top"] = values.valueOfBorder(c);
+                    output["bdr-top"] = values.valueOfBorder(c);
                     break;
 
                 case "bottom":
                     output["border-bottom"] = values.valueOfBorder(c);
+                    output["bdr-bottom"] = values.valueOfBorder(c);
+                    break;
+                case "between":
+                    output["bdr-between"] = values.valueOfBorder(c);
                     break;
             }
         });
