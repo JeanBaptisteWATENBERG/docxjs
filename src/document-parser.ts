@@ -114,7 +114,7 @@ export class DocumentParser {
         return result;
     }
 
-    private checkAndMergeConsecutivePragraphBorder(children: ElementBase[]) {
+    private checkAndMergeConsecutivePragraphBorder(children: OpenXmlElement[]) {
         if (children.length > 1 && children[children.length - 1] instanceof Paragraph && children[children.length - 2] instanceof Paragraph) {
             const p1 = children[children.length - 2];
             const p2 = children[children.length - 1];
@@ -146,6 +146,7 @@ export class DocumentParser {
             switch (elem.localName) {
                 case "p":
                     result.children.push(this.parseParagraph(elem));
+                    this.checkAndMergeConsecutivePragraphBorder(result.children);
                     break;
 
                 case "tbl":
@@ -924,6 +925,7 @@ export class DocumentParser {
 
                 case "p":
                     result.children.push(this.parseParagraph(c));
+                    this.checkAndMergeConsecutivePragraphBorder(result.children);
                     break;
 
                 case "tcPr":

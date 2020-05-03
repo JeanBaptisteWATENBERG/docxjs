@@ -230,6 +230,7 @@ var DocumentParser = (function () {
             switch (elem.localName) {
                 case "p":
                     result.children.push(_this.parseParagraph(elem));
+                    _this.checkAndMergeConsecutivePragraphBorder(result.children);
                     break;
                 case "tbl":
                     result.children.push(_this.parseTable(elem));
@@ -894,6 +895,7 @@ var DocumentParser = (function () {
                     break;
                 case "p":
                     result.children.push(_this.parseParagraph(c));
+                    _this.checkAndMergeConsecutivePragraphBorder(result.children);
                     break;
                 case "tcPr":
                     _this.parseTableCellProperties(c, result);
