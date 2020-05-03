@@ -3037,9 +3037,8 @@ var HtmlRenderer = (function () {
                 into.appendChild(renderedElement);
                 var containerAfterHeight = into.getBoundingClientRect().height;
                 var containsPageBreak = renderedElement.querySelector('.page-break');
-                if (containsPageBreak) {
-                    appendedElements.push(renderedElement);
-                    remainingElements.shift();
+                if (containsPageBreak && appendedElements.length !== 0) {
+                    into.removeChild(renderedElement);
                     return { renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 }
                 else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {

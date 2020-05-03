@@ -518,9 +518,8 @@ export class HtmlRenderer {
                 const containerAfterHeight = into.getBoundingClientRect().height;
                 const containsPageBreak = (renderedElement as HTMLElement).querySelector('.page-break');
                 
-                if (containsPageBreak) {
-                    appendedElements.push(renderedElement);
-                    remainingElements.shift();
+                if (containsPageBreak && appendedElements.length !== 0) {
+                    into.removeChild(renderedElement);
                     return {renderedElements: appendedElements, remainingElementsAfterConstraintReached: remainingElements };
                 } else if (heightConstrained && containerBeforeHeight !== containerAfterHeight) {
                     into.removeChild(renderedElement);
