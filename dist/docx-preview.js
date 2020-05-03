@@ -207,7 +207,8 @@ var DocumentParser = (function () {
         if (children.length > 1 && children[children.length - 1] instanceof paragraph_2.Paragraph && children[children.length - 2] instanceof paragraph_2.Paragraph) {
             var p1 = children[children.length - 2];
             var p2 = children[children.length - 1];
-            if (p2.style['bdr-left'] === p1.style['bdr-left'] &&
+            if (p2.style && p1.style &&
+                p2.style['bdr-left'] === p1.style['bdr-left'] &&
                 p2.style['bdr-right'] === p1.style['bdr-right'] &&
                 p2.style['bdr-top'] === p1.style['bdr-top'] &&
                 p2.style['bdr-bottom'] === p1.style['bdr-bottom'] &&

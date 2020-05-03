@@ -120,6 +120,7 @@ export class DocumentParser {
             const p2 = children[children.length - 1];
             
             if (
+                p2.style && p1.style &&
                 p2.style['bdr-left'] === p1.style['bdr-left'] &&
                 p2.style['bdr-right'] === p1.style['bdr-right'] &&
                 p2.style['bdr-top'] === p1.style['bdr-top'] &&
