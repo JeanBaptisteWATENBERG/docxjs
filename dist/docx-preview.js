@@ -526,6 +526,7 @@ var DocumentParser = (function () {
                     _this.parseFrame(c, paragraph);
                     break;
                 case "rPr":
+                    _this.parseDefaultProperties(c, paragraph.style);
                     break;
                 default:
                     return false;
@@ -946,6 +947,9 @@ var DocumentParser = (function () {
                     break;
                 case "b":
                     style["font-weight"] = values.valueOfBold(c);
+                    break;
+                case "caps":
+                    style["text-transform"] = "uppercase";
                     break;
                 case "i":
                     style["font-style"] = "italic";

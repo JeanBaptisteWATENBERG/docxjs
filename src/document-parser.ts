@@ -472,7 +472,7 @@ export class DocumentParser {
                     break;
 
                 case "rPr":
-                    //TODO ignore
+                    this.parseDefaultProperties(c, paragraph.style);
                     break;
 
                 default:
@@ -989,6 +989,10 @@ export class DocumentParser {
 
                 case "b":
                     style["font-weight"] = values.valueOfBold(c);
+                    break;
+
+                case "caps":
+                    style["text-transform"] = "uppercase";
                     break;
 
                 case "i":
