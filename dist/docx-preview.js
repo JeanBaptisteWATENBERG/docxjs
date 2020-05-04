@@ -490,6 +490,7 @@ var DocumentParser = (function () {
             switch (n.localName) {
                 case "pPr":
                     _this.parseDefaultProperties(n, result.style);
+                    delete result.style["text-indent"];
                     break;
                 case "lvlPicBulletId":
                     var id = xml.intAttr(n, "val");
@@ -543,7 +544,7 @@ var DocumentParser = (function () {
                     _this.parseFrame(c, paragraph);
                     break;
                 case "rPr":
-                    _this.parseDefaultProperties(c, paragraph.style);
+                    _this.parseDefaultProperties(c, paragraph.defaultRunStyle);
                     break;
                 default:
                     return false;
@@ -638,8 +639,8 @@ var DocumentParser = (function () {
         var isAnchor = node.localName == "anchor";
         var wrapType = null;
         var simplePos = xml.boolAttr(node, "simplePos");
-        var posX = { relative: "page", align: "left", offset: "0" };
-        var posY = { relative: "page", align: "top", offset: "0" };
+        var posX = { relative: "page", align: null, offset: "0" };
+        var posY = { relative: "page", align: null, offset: "0" };
         for (var _i = 0, _a = xml.elements(node); _i < _a.length; _i++) {
             var n = _a[_i];
             switch (n.localName) {
@@ -698,7 +699,7 @@ var DocumentParser = (function () {
             if (posY.offset)
                 result.style["top"] = posY.offset;
         }
-        else if (isAnchor && !simplePos) {
+        else if (isAnchor && !simplePos && !(posX.align == 'left' || posX.align == 'right')) {
             result.style['position'] = 'absolute';
             result.style['top'] = posY.offset;
             result.style['left'] = posX.offset;
@@ -2212,6 +2213,17 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -2222,10 +2234,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var element_base_1 = __webpack_require__(/*! ./element-base */ "./src/elements/element-base.ts");
 var utils_1 = __webpack_require__(/*! ../utils */ "./src/utils.ts");
 var xml_serialize_1 = __webpack_require__(/*! ../parser/xml-serialize */ "./src/parser/xml-serialize.ts");
+var run_1 = __webpack_require__(/*! ./run */ "./src/elements/run.ts");
 var Paragraph = (function (_super) {
     __extends(Paragraph, _super);
     function Paragraph() {
         var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.defaultRunStyle = {};
         _this.props = {};
         return _this;
     }
@@ -2234,6 +2248,16 @@ var Paragraph = (function (_super) {
         if (this.props.numbering) {
             var numberingClass = ctx.numberingClass(this.props.numbering.id, this.props.numbering.level);
             elem.className = utils_1.appendClass(elem.className, numberingClass);
+        }
+        if (this.children.length > 0) {
+            if (this.children.find(function (c) { return c instanceof run_1.Run && (!c.style || Object.keys(c.style).length === 0); })) {
+                this.style = __assign(__assign({}, this.style), this.defaultRunStyle);
+                element_base_1.renderStyleValues(this.style, elem);
+            }
+        }
+        else {
+            this.style = __assign(__assign({}, this.style), this.defaultRunStyle);
+            element_base_1.renderStyleValues(this.style, elem);
         }
         return elem;
     };
@@ -3032,7 +3056,8 @@ var HtmlRenderer = (function () {
                 }
                 styleText += this_3.styleToString(selector + ":before", {
                     "content": this_3.levelTextToContent(num.levelText, num.id),
-                    "counter-increment": counter
+                    "counter-increment": counter,
+                    "margin-right": "8pt",
                 });
                 styleText += this_3.styleToString(selector, __assign({ "display": "list-item", "list-style-position": "inside", "list-style-type": "none" }, num.style));
             }

@@ -426,6 +426,7 @@ export class DocumentParser {
             switch (n.localName) {
                 case "pPr":
                     this.parseDefaultProperties(n, result.style);
+                    delete result.style["text-indent"]; // disable text indent parsing for lists as it brings some glitch to rendering
                     break;
 
                 case "lvlPicBulletId":
@@ -493,7 +494,7 @@ export class DocumentParser {
                     break;
 
                 case "rPr":
-                    this.parseDefaultProperties(c, paragraph.style);
+                    this.parseDefaultProperties(c, paragraph.defaultRunStyle);
                     break;
 
                 default:
@@ -618,8 +619,8 @@ export class DocumentParser {
         let wrapType: "wrapTopAndBottom" | "wrapNone" | null = null; 
         let simplePos = xml.boolAttr(node, "simplePos");
 
-        let posX = { relative: "page", align: "left", offset: "0" };
-        let posY = { relative: "page", align: "top", offset: "0" };
+        let posX = { relative: "page", align: null, offset: "0" };
+        let posY = { relative: "page", align: null, offset: "0" };
 
         for (var n of xml.elements(node)) {
             switch (n.localName) {
@@ -691,7 +692,7 @@ export class DocumentParser {
             if(posY.offset)
                 result.style["top"] = posY.offset;
         }
-        else if (isAnchor && !simplePos) {
+        else if (isAnchor && !simplePos && !(posX.align == 'left' || posX.align == 'right')) {
             result.style['position'] = 'absolute';
             result.style['top'] = posY.offset;
             result.style['left'] = posX.offset;

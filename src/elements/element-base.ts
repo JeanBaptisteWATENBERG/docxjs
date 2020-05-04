@@ -40,7 +40,6 @@ export abstract class ContainerBase extends ElementBase {
     }
 }
 
-///deprecated
 export function renderStyleValues(style: any, ouput: HTMLElement) {
     if (style == null)
         return;

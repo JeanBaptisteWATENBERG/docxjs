@@ -415,7 +415,8 @@ export class HtmlRenderer {
 
                 styleText += this.styleToString(`${selector}:before`, {
                     "content": this.levelTextToContent(num.levelText, num.id),
-                    "counter-increment": counter
+                    "counter-increment": counter,
+                    "margin-right": "8pt",
                 });
 
                 styleText += this.styleToString(selector, {

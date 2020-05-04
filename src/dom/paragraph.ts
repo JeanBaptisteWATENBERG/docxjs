@@ -1,8 +1,9 @@
-import { OpenXmlElement } from "./dom";
+import { OpenXmlElement, IDomStyleValues } from "./dom";
 import { CommonProperties, Length, Borders } from "./common";
 import { SectionProperties } from "./document";
 
 export interface ParagraphElement extends OpenXmlElement {
+    defaultRunStyle: IDomStyleValues;
     props: ParagraphProperties;
 }
 
