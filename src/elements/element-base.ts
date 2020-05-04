@@ -1,6 +1,7 @@
 import { OpenXmlElement } from "../dom/dom";
 import { RenderContext } from "../dom/render-context";
 import { appendClass } from "../utils";
+import { sumSizeString } from "../parser/common";
 
 export abstract class ElementBase implements OpenXmlElement {
     type: any;
@@ -46,7 +47,33 @@ export function renderStyleValues(style: any, ouput: HTMLElement) {
 
     for (let key in style) {
         if (style.hasOwnProperty(key)) {
-            ouput.style[key] = style[key];
+            switch(key) {
+                case 'bdr-top':
+                case 'bdr-bottom':
+                case 'bdr-left':
+                case 'bdr-right':
+                    break;
+                case 'padding-top':
+                case 'padding-bottom':
+                case 'padding-left':
+                case 'padding-right':
+                    ouput.style[key] = sumSizeString(ouput.style[key], style[key]);
+                    break;
+                case 'bdr-top-space':
+                    ouput.style["padding-top"] = sumSizeString(ouput.style["padding-top"], style[key]);
+                    break;
+                case 'bdr-bottom-space':
+                    ouput.style["padding-bottom"] = sumSizeString(ouput.style["padding-bottom"], style[key]);
+                    break;
+                case 'bdr-left-space':
+                    ouput.style["padding-left"] = sumSizeString(ouput.style["padding-left"], style[key]);
+                    break;
+                case 'bdr-right-space':
+                    ouput.style["padding-right"] = sumSizeString(ouput.style["padding-right"], style[key]);
+                    break;
+                default:
+                    ouput.style[key] = style[key];
+            }
         }
     }
 }

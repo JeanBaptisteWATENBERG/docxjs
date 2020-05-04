@@ -796,6 +796,7 @@ var DocumentParser = (function () {
                                 if (nextCell instanceof cell_1.Cell && (!nextCell.props.vMerge || nextCell.props.vMerge === 'restart')) {
                                     break;
                                 }
+                                cell.style["border-bottom"] = nextCell.style["border-bottom"];
                                 rowSpan++;
                             }
                         }
@@ -1103,17 +1104,17 @@ var DocumentParser = (function () {
         var start = xml.sizeAttr(node, "start");
         var right = xml.sizeAttr(node, "right");
         var end = xml.sizeAttr(node, "end");
-        var numericFirstLine = firstLine ? parseInt(firstLine.replace('pt', '')) : 0;
-        var numericHanging = hanging ? parseInt(hanging.replace('pt', '')) : 0;
+        var numericFirstLine = firstLine ? common_2.parseSizeFromSizeString(firstLine) : 0;
+        var numericHanging = hanging ? common_2.parseSizeFromSizeString(hanging) : 0;
         var numericTextIndent = numericFirstLine - numericHanging;
         if (numericTextIndent !== 0) {
             var textIndent = numericTextIndent + "pt";
             style["text-indent"] = textIndent;
         }
         if (left || start)
-            style[marginOrPadding + "-left"] = left || start;
+            style[marginOrPadding + "-left"] = common_2.sumSizeString(style[marginOrPadding + "-left"], left || start);
         if (right || end)
-            style[marginOrPadding + "-right"] = right || end;
+            style[marginOrPadding + "-right"] = common_2.sumSizeString(style[marginOrPadding + "-right"], right || end);
     };
     DocumentParser.prototype.parseSpacing = function (node, style) {
         var before = xml.sizeAttr(node, "before");
@@ -1143,16 +1144,16 @@ var DocumentParser = (function () {
         xml.foreach(node, function (c) {
             switch (c.localName) {
                 case "left":
-                    output["padding-left"] = values.valueOfMargin(c);
+                    output["padding-left"] = common_2.sumSizeString(output["padding-left"], values.valueOfMargin(c));
                     break;
                 case "right":
-                    output["padding-right"] = values.valueOfMargin(c);
+                    output["padding-right"] = common_2.sumSizeString(output["padding-right"], values.valueOfMargin(c));
                     break;
                 case "top":
-                    output["padding-top"] = values.valueOfMargin(c);
+                    output["padding-top"] = common_2.sumSizeString(output["padding-top"], values.valueOfMargin(c));
                     break;
                 case "bottom":
-                    output["padding-bottom"] = values.valueOfMargin(c);
+                    output["padding-bottom"] = common_2.sumSizeString(output["padding-bottom"], values.valueOfMargin(c));
                     break;
             }
         });
@@ -1175,19 +1176,23 @@ var DocumentParser = (function () {
                 case "left":
                     output["border-left"] = values.valueOfBorder(c);
                     output["bdr-left"] = values.valueOfBorder(c);
+                    output["bdr-left-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
                 case "end":
                 case "right":
                     output["border-right"] = values.valueOfBorder(c);
                     output["bdr-right"] = values.valueOfBorder(c);
+                    output["bdr-right-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
                 case "top":
                     output["border-top"] = values.valueOfBorder(c);
                     output["bdr-top"] = values.valueOfBorder(c);
+                    output["bdr-top-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
                 case "bottom":
                     output["border-bottom"] = values.valueOfBorder(c);
                     output["bdr-bottom"] = values.valueOfBorder(c);
+                    output["bdr-bottom-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
                 case "between":
                     output["bdr-between"] = values.valueOfBorder(c);
@@ -1205,6 +1210,7 @@ var SizeType;
     SizeType[SizeType["Emu"] = 2] = "Emu";
     SizeType[SizeType["Border"] = 3] = "Border";
     SizeType[SizeType["Percent"] = 4] = "Percent";
+    SizeType[SizeType["Pt"] = 5] = "Pt";
 })(SizeType || (SizeType = {}));
 var xml = (function () {
     function xml() {
@@ -1294,6 +1300,7 @@ var xml = (function () {
         var intVal = parseInt(val);
         switch (type) {
             case SizeType.Dxa: return (0.05 * intVal).toFixed(2) + "pt";
+            case SizeType.Pt: return (intVal).toFixed(2) + "pt";
             case SizeType.Emu: return (intVal / 12700).toFixed(2) + "pt";
             case SizeType.FontSize: return (0.5 * intVal).toFixed(2) + "pt";
             case SizeType.Border: return (0.125 * intVal).toFixed(2) + "pt";
@@ -1307,6 +1314,7 @@ var xml = (function () {
     };
     return xml;
 }());
+exports.xml = xml;
 var values = (function () {
     function values() {
     }
@@ -1902,6 +1910,8 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var element_base_1 = __webpack_require__(/*! ./element-base */ "./src/elements/element-base.ts");
+var document_parser_1 = __webpack_require__(/*! ../document-parser */ "./src/document-parser.ts");
+var common_1 = __webpack_require__(/*! ../parser/common */ "./src/parser/common.ts");
 var Cell = (function (_super) {
     __extends(Cell, _super);
     function Cell() {
@@ -1919,6 +1929,18 @@ var Cell = (function (_super) {
         if (this.props.vMerge && this.props.vMerge !== 'restart') {
             return null;
         }
+        if (!this.style["padding-left"]) {
+            this.style["padding-left"] = document_parser_1.xml.convertSize("115");
+        }
+        if (!this.style["padding-right"]) {
+            this.style["padding-right"] = document_parser_1.xml.convertSize("115");
+        }
+        if (this.style["width"]) {
+            this.style["width"] = (common_1.parseSizeFromSizeString(this.style["width"]) -
+                common_1.parseSizeFromSizeString(this.style["padding-right"]) -
+                common_1.parseSizeFromSizeString(this.style["padding-left"])) + "pt";
+        }
+        element_base_1.renderStyleValues(this.style, elem);
         return elem;
     };
     return Cell;
@@ -2009,6 +2031,7 @@ var __assign = (this && this.__assign) || function () {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 var utils_1 = __webpack_require__(/*! ../utils */ "./src/utils.ts");
+var common_1 = __webpack_require__(/*! ../parser/common */ "./src/parser/common.ts");
 var ElementBase = (function () {
     function ElementBase() {
     }
@@ -2054,7 +2077,33 @@ function renderStyleValues(style, ouput) {
         return;
     for (var key in style) {
         if (style.hasOwnProperty(key)) {
-            ouput.style[key] = style[key];
+            switch (key) {
+                case 'bdr-top':
+                case 'bdr-bottom':
+                case 'bdr-left':
+                case 'bdr-right':
+                    break;
+                case 'padding-top':
+                case 'padding-bottom':
+                case 'padding-left':
+                case 'padding-right':
+                    ouput.style[key] = common_1.sumSizeString(ouput.style[key], style[key]);
+                    break;
+                case 'bdr-top-space':
+                    ouput.style["padding-top"] = common_1.sumSizeString(ouput.style["padding-top"], style[key]);
+                    break;
+                case 'bdr-bottom-space':
+                    ouput.style["padding-bottom"] = common_1.sumSizeString(ouput.style["padding-bottom"], style[key]);
+                    break;
+                case 'bdr-left-space':
+                    ouput.style["padding-left"] = common_1.sumSizeString(ouput.style["padding-left"], style[key]);
+                    break;
+                case 'bdr-right-space':
+                    ouput.style["padding-right"] = common_1.sumSizeString(ouput.style["padding-right"], style[key]);
+                    break;
+                default:
+                    ouput.style[key] = style[key];
+            }
         }
     }
 }
@@ -2147,6 +2196,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var element_base_1 = __webpack_require__(/*! ./element-base */ "./src/elements/element-base.ts");
+var common_1 = __webpack_require__(/*! ../parser/common */ "./src/parser/common.ts");
 var Image = (function (_super) {
     __extends(Image, _super);
     function Image() {
@@ -2167,8 +2217,8 @@ var Image = (function (_super) {
             cropWrapper.appendChild(result);
             element_base_1.renderStyleValues(this.style, cropWrapper);
             cropWrapper.style.overflow = "hidden";
-            var width = parseInt(cropWrapper.style.width.replace('pt', ''));
-            var height = parseInt(cropWrapper.style.height.replace('pt', ''));
+            var width = common_1.parseSizeFromSizeString(cropWrapper.style.width);
+            var height = common_1.parseSizeFromSizeString(cropWrapper.style.height);
             var imageWidth = width / (1 - (this.crop.left / 100000) - (this.crop.right / 100000));
             var imageHeight = height / (1 - (this.crop.top / 100000) - (this.crop.bottom / 100000));
             result.style.marginLeft = "-" + imageWidth * this.crop.left / 100000 + "pt";
@@ -3352,6 +3402,22 @@ function parseBorders(elem) {
     return result;
 }
 exports.parseBorders = parseBorders;
+function parseSizeFromSizeString(sizeString, unit) {
+    if (unit === void 0) { unit = 'pt'; }
+    return parseInt(sizeString.replace(unit, ""), 10);
+}
+exports.parseSizeFromSizeString = parseSizeFromSizeString;
+function sumSizeString(originalSizeString, addSizeString, unit) {
+    if (unit === void 0) { unit = 'pt'; }
+    if (!originalSizeString)
+        return addSizeString;
+    if (!addSizeString)
+        return originalSizeString;
+    var originalSize = parseSizeFromSizeString(originalSizeString, unit);
+    var addSize = parseSizeFromSizeString(addSizeString, unit);
+    return originalSize + addSize + unit;
+}
+exports.sumSizeString = sumSizeString;
 
 
 /***/ }),

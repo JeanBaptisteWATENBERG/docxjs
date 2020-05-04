@@ -76,3 +76,17 @@ export function parseBorders(elem: Element): Borders {
 
     return result;
 }
+
+export function parseSizeFromSizeString(sizeString: string, unit: string = 'pt') {
+    return parseInt(sizeString.replace(unit, ""), 10);
+}
+
+export function sumSizeString(originalSizeString?: string, addSizeString?: string, unit: string = 'pt') {
+    if (!originalSizeString) return addSizeString;
+    if (!addSizeString) return originalSizeString;
+
+    const originalSize = parseSizeFromSizeString(originalSizeString, unit);
+    const addSize = parseSizeFromSizeString(addSizeString, unit);
+
+    return originalSize + addSize + unit;
+}

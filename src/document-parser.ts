@@ -5,7 +5,7 @@ import * as utils from './utils';
 import { PartType } from './document';
 import { DocumentElement } from './dom/document';
 import { ns, CommonProperties } from './dom/common';
-import { lengthAttr, colorAttr, LengthUsage } from './parser/common';
+import { lengthAttr, colorAttr, LengthUsage, parseSizeFromSizeString, sumSizeString } from './parser/common';
 import { ParagraphElement } from './dom/paragraph';
 import { parseParagraphProperties } from './parser/paragraph';
 import { parseSectionProperties } from './parser/section';
@@ -805,6 +805,7 @@ export class DocumentParser {
                                 if (nextCell instanceof Cell && (!nextCell.props.vMerge || nextCell.props.vMerge === 'restart')) {
                                     break;
                                 }
+                                cell.style["border-bottom"] = nextCell.style["border-bottom"];
                                 rowSpan++;
                             }
                         }
@@ -1185,15 +1186,15 @@ export class DocumentParser {
         var right = xml.sizeAttr(node, "right");
         var end = xml.sizeAttr(node, "end");
 
-        const numericFirstLine = firstLine ? parseInt(firstLine.replace('pt', '')) : 0;
-        const numericHanging = hanging ? parseInt(hanging.replace('pt', '')) : 0;
+        const numericFirstLine = firstLine ? parseSizeFromSizeString(firstLine) : 0;
+        const numericHanging = hanging ? parseSizeFromSizeString(hanging) : 0;
         const numericTextIndent = numericFirstLine - numericHanging;
         if (numericTextIndent !== 0) {
             const textIndent = `${numericTextIndent}pt`;
             style["text-indent"] = textIndent;
         }
-        if (left || start) style[`${marginOrPadding}-left`] = left || start;
-        if (right || end) style[`${marginOrPadding}-right`] = right || end;
+        if (left || start) style[`${marginOrPadding}-left`] = sumSizeString(style[`${marginOrPadding}-left`], left || start);
+        if (right || end) style[`${marginOrPadding}-right`] = sumSizeString(style[`${marginOrPadding}-right`], right || end);
     }
 
     parseSpacing(node: Element, style: IDomStyleValues) {
@@ -1227,19 +1228,19 @@ export class DocumentParser {
         xml.foreach(node, c => {
             switch (c.localName) {
                 case "left":
-                    output["padding-left"] = values.valueOfMargin(c);
+                    output["padding-left"] = sumSizeString(output["padding-left"], values.valueOfMargin(c));
                     break;
 
                 case "right":
-                    output["padding-right"] = values.valueOfMargin(c);
+                    output["padding-right"] = sumSizeString(output["padding-right"], values.valueOfMargin(c));
                     break;
 
                 case "top":
-                    output["padding-top"] = values.valueOfMargin(c);
+                    output["padding-top"] = sumSizeString(output["padding-top"], values.valueOfMargin(c));
                     break;
 
                 case "bottom":
-                    output["padding-bottom"] = values.valueOfMargin(c);
+                    output["padding-bottom"] = sumSizeString(output["padding-bottom"], values.valueOfMargin(c));
                     break;
             }
         });
@@ -1267,22 +1268,26 @@ export class DocumentParser {
                 case "left":
                     output["border-left"] = values.valueOfBorder(c);
                     output["bdr-left"] = values.valueOfBorder(c);
+                    output["bdr-left-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
 
                 case "end":
                 case "right":
                     output["border-right"] = values.valueOfBorder(c);
                     output["bdr-right"] = values.valueOfBorder(c);
+                    output["bdr-right-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
 
                 case "top":
                     output["border-top"] = values.valueOfBorder(c);
                     output["bdr-top"] = values.valueOfBorder(c);
+                    output["bdr-top-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
 
                 case "bottom":
                     output["border-bottom"] = values.valueOfBorder(c);
                     output["bdr-bottom"] = values.valueOfBorder(c);
+                    output["bdr-bottom-space"] = xml.sizeAttr(c, "space", SizeType.Pt);
                     break;
                 case "between":
                     output["bdr-between"] = values.valueOfBorder(c);
@@ -1297,10 +1302,11 @@ enum SizeType {
     Dxa,
     Emu,
     Border,
-    Percent
+    Percent,
+    Pt
 }
 
-class xml {
+export class xml {
     static parse(xmlString: string, skipDeclaration: boolean = true): Element {
         if (skipDeclaration)
             xmlString = xmlString.replace(/<[?].*[?]>/, "");
@@ -1403,6 +1409,7 @@ class xml {
 
         switch (type) {
             case SizeType.Dxa: return (0.05 * intVal).toFixed(2) + "pt";
+            case SizeType.Pt: return (intVal).toFixed(2) + "pt";
             case SizeType.Emu: return (intVal / 12700).toFixed(2) + "pt";
             case SizeType.FontSize: return (0.5 * intVal).toFixed(2) + "pt";
             case SizeType.Border: return (0.125 * intVal).toFixed(2) + "pt";
